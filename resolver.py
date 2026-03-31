@@ -8,7 +8,7 @@ import probes
 import registry
 
 
-def check_dependencies(plugin_name: str, marketplace: str = "claude-plugins-nov") -> dict:
+def check_dependencies(plugin_name: str, marketplace: str = "nov-plugins") -> dict:
     """Check which dependencies a plugin has and their satisfaction status.
 
     Returns:
@@ -61,7 +61,7 @@ def check_dependencies(plugin_name: str, marketplace: str = "claude-plugins-nov"
     }
 
 
-def resolve(capability: str, marketplace: str = "claude-plugins-nov") -> list[dict]:
+def resolve(capability: str, marketplace: str = "nov-plugins") -> list[dict]:
     """Find and rank providers for a capability based on environment match.
 
     Returns:
@@ -119,7 +119,7 @@ def resolve(capability: str, marketplace: str = "claude-plugins-nov") -> list[di
     return ranked
 
 
-def get_install_plan(plugin_name: str, marketplace: str = "claude-plugins-nov") -> dict:
+def get_install_plan(plugin_name: str, marketplace: str = "nov-plugins") -> dict:
     """Generate an ordered install plan for a plugin and its dependencies.
 
     Auto-selects the best provider for each missing capability.
@@ -193,44 +193,6 @@ def get_install_plan(plugin_name: str, marketplace: str = "claude-plugins-nov") 
         "install_order": install_order,
         "already_satisfied": already_satisfied,
         "no_provider_available": no_provider,
-    }
-
-
-def verify(plugin_name: str, marketplace: str = "claude-plugins-nov") -> dict:
-    """Verify a plugin's dependencies are all satisfied.
-
-    Returns:
-        {
-            "plugin": str,
-            "passed": bool,
-            "details": dict  — from check_dependencies
-        }
-    """
-    deps = check_dependencies(plugin_name, marketplace)
-    passed = len(deps.get("missing", [])) == 0
-    return {
-        "plugin": plugin_name,
-        "passed": passed,
-        "details": deps,
-    }
-
-
-def detect_environment() -> dict:
-    """Run all probes and return a full environment snapshot.
-
-    Returns:
-        Dict with all detected facts about the current environment.
-    """
-    return {
-        "os": probes.probe_os(),
-        "shell": probes.probe_shell(),
-        "common_binaries": {
-            name: probes.probe_binary(name)
-            for name in [
-                "notify-send", "docker", "nginx", "cloudflared", "gh",
-                "python", "node", "npm", "pip", "git", "curl",
-            ]
-        },
     }
 
 

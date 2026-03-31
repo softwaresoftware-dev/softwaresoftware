@@ -10,12 +10,11 @@ def mock_home(tmp_path, monkeypatch):
     """Set up a fake ~/.claude directory structure for testing."""
     claude_dir = tmp_path / ".claude"
     plugins_dir = claude_dir / "plugins"
-    marketplaces_dir = plugins_dir / "marketplaces" / "claude-plugins-nov"
-    capabilities_dir = marketplaces_dir / "capabilities"
+    marketplaces_dir = plugins_dir / "marketplaces" / "nov-plugins"
     claude_plugin_dir = marketplaces_dir / ".claude-plugin"
-    cache_dir = plugins_dir / "cache" / "claude-plugins-nov"
+    cache_dir = plugins_dir / "cache" / "nov-plugins"
 
-    for d in [capabilities_dir, claude_plugin_dir, cache_dir]:
+    for d in [claude_plugin_dir, cache_dir]:
         d.mkdir(parents=True)
 
     # Patch Path.home() to return tmp_path
@@ -36,9 +35,9 @@ def mock_home(tmp_path, monkeypatch):
 @pytest.fixture
 def marketplace_json(mock_home):
     """Write a marketplace.json with test plugins."""
-    mp_path = mock_home / ".claude" / "plugins" / "marketplaces" / "claude-plugins-nov" / ".claude-plugin" / "marketplace.json"
+    mp_path = mock_home / ".claude" / "plugins" / "marketplaces" / "nov-plugins" / ".claude-plugin" / "marketplace.json"
     data = {
-        "name": "claude-plugins-nov",
+        "name": "nov-plugins",
         "plugins": [
             {
                 "name": "cardwatch",
@@ -128,34 +127,9 @@ def marketplace_json(mock_home):
 
 
 @pytest.fixture
-def notification_contract(mock_home):
-    """Write a notification capability contract."""
-    cap_path = mock_home / ".claude" / "plugins" / "marketplaces" / "claude-plugins-nov" / "capabilities" / "notification.json"
-    data = {
-        "name": "notification",
-        "description": "Alert the user through one or more channels",
-        "version": "3.0.0",
-        "behavior": {
-            "input": "A message string and optional hints dict",
-            "output": "Confirmation of delivery with channel details and success/failure status",
-            "deterministic": "Delivery must succeed or return explicit failure",
-        },
-        "hints": {
-            "urgency": {
-                "type": "string",
-                "enum": ["low", "normal", "critical"],
-                "default": "normal",
-            },
-        },
-    }
-    cap_path.write_text(json.dumps(data))
-    return data
-
-
-@pytest.fixture
 def installed_plugins(mock_home):
     """Write an installed_plugins.json with notify-linux installed."""
-    install_path = mock_home / ".claude" / "plugins" / "cache" / "claude-plugins-nov" / "notify-linux" / "2.0.0"
+    install_path = mock_home / ".claude" / "plugins" / "cache" / "nov-plugins" / "notify-linux" / "2.0.0"
     install_path.mkdir(parents=True)
     plugin_dir = install_path / ".claude-plugin"
     plugin_dir.mkdir()
@@ -167,7 +141,7 @@ def installed_plugins(mock_home):
     data = {
         "version": 2,
         "plugins": {
-            "notify-linux@claude-plugins-nov": [
+            "notify-linux@nov-plugins": [
                 {
                     "scope": "user",
                     "installPath": str(install_path),

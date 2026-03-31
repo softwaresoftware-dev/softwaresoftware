@@ -17,7 +17,7 @@ def test_get_installed_plugins_empty(mock_home):
 
 def test_get_installed_plugins(mock_home, installed_plugins):
     result = registry.get_installed_plugins()
-    assert "notify-linux@claude-plugins-nov" in result
+    assert "notify-linux@nov-plugins" in result
 
 
 def test_get_marketplace_plugins(mock_home, marketplace_json):
@@ -60,39 +60,21 @@ def test_is_plugin_installed(mock_home, installed_plugins):
     assert registry.is_plugin_installed("cardwatch") is False
 
 
-def test_get_capability_contract(mock_home, notification_contract):
-    contract = registry.get_capability_contract("notification")
-    assert contract is not None
-    assert contract["name"] == "notification"
-    assert "behavior" in contract
-    assert "hints" in contract
-
-
-def test_get_capability_contract_missing(mock_home):
-    assert registry.get_capability_contract("nonexistent") is None
-
-
-def test_list_capability_contracts(mock_home, notification_contract):
-    contracts = registry.list_capability_contracts()
-    assert len(contracts) == 1
-    assert contracts[0]["name"] == "notification"
-
-
 def test_get_plugin_manifest(mock_home, installed_plugins):
-    manifest = registry.get_plugin_manifest("notify-linux@claude-plugins-nov")
+    manifest = registry.get_plugin_manifest("notify-linux@nov-plugins")
     assert manifest is not None
     assert manifest["name"] == "notify-linux"
     assert "notify-linux" in manifest["mcpServers"]
 
 
 def test_get_plugin_manifest_missing(mock_home):
-    assert registry.get_plugin_manifest("nonexistent@claude-plugins-nov") is None
+    assert registry.get_plugin_manifest("nonexistent@nov-plugins") is None
 
 
 def test_get_enabled_plugins(mock_home):
     settings_path = mock_home / ".claude" / "settings.json"
     settings_path.write_text(json.dumps({
-        "enabledPlugins": {"liteframe@claude-plugins-nov": True}
+        "enabledPlugins": {"liteframe@nov-plugins": True}
     }))
     result = registry.get_enabled_plugins()
-    assert result == {"liteframe@claude-plugins-nov": True}
+    assert result == {"liteframe@nov-plugins": True}

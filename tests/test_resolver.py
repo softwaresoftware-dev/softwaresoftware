@@ -111,17 +111,6 @@ def test_get_install_plan_not_found(mock_home, marketplace_json):
     assert "error" in plan
 
 
-def test_verify_pass(mock_home, marketplace_json, installed_plugins):
-    result = resolver.verify("cardwatch")
-    assert result["passed"] is True
-
-
-def test_verify_fail(mock_home, marketplace_json):
-    result = resolver.verify("cardwatch")
-    assert result["passed"] is False
-    assert "notification" in result["details"]["missing"]
-
-
 def test_get_install_plan_transitive(mock_home, marketplace_json, monkeypatch):
     """Transitive deps: test-app -> browser-automation (test-browser) -> daemon (test-daemon).
 
@@ -148,9 +137,3 @@ def test_get_install_plan_transitive_no_duplicates(mock_home, marketplace_json, 
     assert len(names) == len(set(names))
 
 
-def test_detect_environment():
-    env = resolver.detect_environment()
-    assert "os" in env
-    assert "shell" in env
-    assert "common_binaries" in env
-    assert isinstance(env["common_binaries"], dict)
