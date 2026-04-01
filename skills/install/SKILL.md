@@ -38,10 +38,8 @@ The user provides a plugin name (e.g., `/nov-dependency-resolver:install zapfram
 
 6. **Verify.** Run `claude plugin list` and confirm all expected plugins appear. Report success or any discrepancies.
 
-7. **Reload plugins.** Run `/reload-plugins` to load the newly installed plugins' skills and MCP tools into the current session — no restart needed.
-
-8. **Next steps.** Tell the user:
-   - The new plugins are loaded and ready to use
+7. **Next steps.** Tell the user:
+   - Type `/reload-plugins` to load the new plugins into the current session (no restart needed)
    - List the skills the target plugin provides (look up its marketplace entry description to give context)
    - If the plugin has `userConfig` fields, mention they can run `claude plugin configure <plugin_name>` to set them up
 
