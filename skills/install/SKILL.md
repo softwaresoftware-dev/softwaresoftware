@@ -30,20 +30,15 @@ The user provides a plugin name (e.g., `/nov-dependency-resolver:install zapfram
 
 4. **Ask for confirmation.** Wait for explicit user approval before installing anything.
 
-5. **Install in order.** For each entry in `install_order`, run:
-   ```
-   claude plugin install <plugin_name>
-   ```
-   If any install fails, stop and report the error. Don't continue with remaining installs.
+5. **Create tasks and install.** After confirmation, create a task for each plugin to install (dependencies + target). Each task should be named like "Install dockside (docker-dev-environment)". Then work through them in order:
+   - Set the task to in_progress
+   - Run `claude plugin install <plugin_name>`
+   - If successful, mark the task completed
+   - If it fails, mark the task as errored and stop — don't continue with remaining installs
 
-6. **Install the target plugin** (skip if `target_installed` is true). Run:
-   ```
-   claude plugin install <plugin_name>
-   ```
+6. **Verify.** Run `claude plugin list` and confirm all expected plugins appear. Report success or any discrepancies.
 
-7. **Verify.** Run `claude plugin list` and confirm all expected plugins appear. Report success or any discrepancies.
-
-8. **Next steps.** Tell the user:
+7. **Next steps.** Tell the user:
    - They need to **restart Claude Code** for the new plugins' skills and MCP tools to load
    - List the skills the target plugin provides (look up its marketplace entry description to give context)
    - If the plugin has `userConfig` fields, mention they can run `claude plugin configure <plugin_name>` to set them up
