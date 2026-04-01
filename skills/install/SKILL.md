@@ -21,12 +21,17 @@ The user provides a plugin name (e.g., `/nov-dependency-resolver:install zapfram
    - If `target_installed` is true AND `install_order` is empty: tell the user the plugin is already installed with all dependencies satisfied. Stop.
    - If `target_installed` is true but `install_order` has entries: tell the user the plugin is installed but has missing dependencies, then continue to step 3 to install them.
 
-3. **Show the plan.** Present what will be installed:
-   - Already satisfied capabilities (no action needed)
-   - Each plugin to install, in order, with: name, what capability it provides, and why it was selected
-   - Mark each entry as **(required)** or **(optional)** based on the `required` field
-   - The target plugin itself (installed last), unless `target_installed` is true
-   - Format as a clear list the user can review at a glance
+3. **Show the plan.** Present what will be installed as a markdown table:
+
+   | # | Plugin | Capability | Status | Required |
+   |---|--------|------------|--------|----------|
+   | — | (name) | (what it provides) | already satisfied / to install | yes / optional |
+   | last | target plugin | — | to install | — |
+
+   - Already-satisfied capabilities show as "already satisfied" in the Status column
+   - Plugins to install show as "to install" with their install order number
+   - The target plugin is the last row, unless `target_installed` is true
+   - Include a one-line summary below the table (e.g., "2 to install, 1 already satisfied")
 
 4. **Ask for confirmation.** Wait for explicit user approval before installing anything.
 
