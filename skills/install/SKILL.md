@@ -38,6 +38,11 @@ The user provides a plugin name (e.g., `/nov-dependency-resolver:install zapfram
 
 7. **Verify.** Run `claude plugin list` and confirm all expected plugins appear. Report success or any discrepancies.
 
+8. **Next steps.** Tell the user:
+   - They need to **restart Claude Code** for the new plugins' skills and MCP tools to load
+   - List the skills the target plugin provides (look up its marketplace entry description to give context)
+   - If the plugin has `userConfig` fields, mention they can run `claude plugin configure <plugin_name>` to set them up
+
 ## Rules
 
 - Never install without showing the plan and getting confirmation first
