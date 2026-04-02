@@ -37,7 +37,7 @@ make test                       # run tests
 
 Install as plugin:
 ```bash
-claude --plugin-dir /home/thatcher/projects/nov/projects/plugins/nov-dependency-resolver
+claude --plugin-dir /home/thatcher/projects/nov/projects/plugins/marketplace/nov-dependency-resolver
 ```
 
 ## Capability System
