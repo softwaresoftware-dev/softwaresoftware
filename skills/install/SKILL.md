@@ -48,16 +48,22 @@ The user provides a plugin name (e.g., `/softwaresoftware:install zapframe`).
 
 5. **Ask for confirmation.** Wait for explicit user approval before installing anything.
 
-6. **Create tasks and install.** After confirmation, create a task for each plugin to install (dependencies + target). Each task should be named like "Install dockside (docker-dev-environment)". Then work through them in order:
+6. **Ensure external registries are configured.** If the install plan includes `external_registries`, check that each is available:
+   - Run `claude plugin marketplace list` and parse the output
+   - For each registry in the plan's `external_registries` map, check if it appears in the marketplace list
+   - If a registry is missing, add it using the `repo` field from the plan: `claude plugin marketplace add <repo>` (e.g., `claude plugin marketplace add anthropics/claude-plugins-official`)
+   - If adding the marketplace fails, tell the user and stop
+
+7. **Create tasks and install.** After confirmation, create a task for each plugin to install (dependencies + target). Each task should be named like "Install dockside (docker-dev-environment)". Then work through them in order:
    - Set the task to in_progress
    - **External plugins** (install plan entry has `"external": true`): Run `claude plugin install <plugin_name>@<registry>` where `<registry>` is the entry's `registry` field (e.g., `claude-plugins-official`)
    - **Local plugins**: Run `claude plugin install <plugin_name>` as before
    - If successful, mark the task completed
    - If it fails, mark the task as errored and stop — don't continue with remaining installs
 
-7. **Verify.** Run `claude plugin list` and confirm all expected plugins appear. Report success or any discrepancies.
+8. **Verify.** Run `claude plugin list` and confirm all expected plugins appear. Report success or any discrepancies.
 
-8. **Next steps.** Tell the user:
+9. **Next steps.** Tell the user:
    - Type `/exit` to quit, then start a new `claude` session to load the installed plugins.
    - List the skills the target plugin provides (look up its marketplace entry description to give context)
    - If the plugin has `userConfig` fields and they need to reconfigure later: `claude plugin disable <name>` then `claude plugin enable <name>`.

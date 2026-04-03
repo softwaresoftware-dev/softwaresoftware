@@ -78,6 +78,19 @@ def get_plugin_manifest(plugin_key: str) -> dict | None:
     return _read_json(manifest_path)
 
 
+def get_external_registries(marketplace: str = "softwaresoftware-plugins") -> dict:
+    """Read the external_registries map from a marketplace.
+
+    Returns:
+        Dict mapping registry name to its config (e.g. {"repo": "anthropics/claude-plugins-official"}).
+    """
+    mp_path = MARKETPLACES_DIR / marketplace / ".claude-plugin" / "marketplace.json"
+    data = _read_json(mp_path)
+    if not data or not isinstance(data, dict):
+        return {}
+    return data.get("external_registries", {})
+
+
 def find_marketplace_plugin(name: str, marketplace: str = "softwaresoftware-plugins") -> dict | None:
     """Find a plugin entry in the marketplace by name.
 

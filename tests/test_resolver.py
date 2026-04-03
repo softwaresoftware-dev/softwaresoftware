@@ -134,6 +134,10 @@ def test_install_plan_external_has_registry(mock_home, marketplace_json_with_ext
     assert ext_entry is not None
     assert ext_entry["registry"] == "claude-plugins-official"
     assert ext_entry["capability"] == "browser-automation"
+    # Plan should include external_registries with repo info
+    assert "external_registries" in plan
+    assert "claude-plugins-official" in plan["external_registries"]
+    assert plan["external_registries"]["claude-plugins-official"]["repo"] == "anthropics/claude-plugins-official"
 
 
 def test_get_install_plan_transitive_no_duplicates(mock_home, marketplace_json, monkeypatch):

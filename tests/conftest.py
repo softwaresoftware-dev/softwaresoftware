@@ -165,6 +165,12 @@ def marketplace_json_with_external(mock_home):
                 "external": True,
             },
         ],
+        "external_registries": {
+            "claude-plugins-official": {
+                "repo": "anthropics/claude-plugins-official",
+                "description": "Anthropic's official plugin directory",
+            }
+        },
     }
     mp_path.write_text(json.dumps(data))
     return data
