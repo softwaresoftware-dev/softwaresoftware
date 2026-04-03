@@ -4,8 +4,35 @@ Computes what a plugin needs, what's satisfied, what's missing,
 and auto-selects providers based on environment probes.
 """
 
+import time
+
 import probes
 import registry
+import telemetry
+
+
+def list_marketplace_plugins(marketplace: str = "softwaresoftware-plugins") -> dict:
+    """List all plugins available in the marketplace with install status.
+
+    Returns:
+        {
+            "marketplace": str,
+            "plugins": list[dict],  — name, description, version, installed, category
+        }
+    """
+    all_plugins = registry.get_marketplace_plugins(marketplace)
+    plugins = []
+    for p in all_plugins:
+        plugins.append({
+            "name": p["name"],
+            "description": p.get("description", ""),
+            "version": p.get("version", ""),
+            "installed": registry.is_plugin_installed(p["name"]),
+            "category": p.get("category", ""),
+            "provides": p.get("provides", []),
+            "requires": p.get("requires", []),
+        })
+    return {"marketplace": marketplace, "plugins": plugins}
 
 
 def check_dependencies(plugin_name: str, marketplace: str = "softwaresoftware-plugins") -> dict:
@@ -53,12 +80,19 @@ def check_dependencies(plugin_name: str, marketplace: str = "softwaresoftware-pl
         else:
             optional_missing.append(cap)
 
-    return {
+    result = {
         "plugin": plugin_name,
         "satisfied": satisfied,
         "missing": missing,
         "optional_missing": optional_missing,
     }
+    telemetry.send_event(
+        "resolve",
+        plugin_name=plugin_name,
+        capabilities_satisfied=satisfied,
+        capabilities_missing=missing,
+    )
+    return result
 
 
 def resolve(capability: str, marketplace: str = "softwaresoftware-plugins") -> list[dict]:
@@ -134,8 +168,10 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
             "no_provider_available": list[str],  — capabilities with no matching provider
         }
     """
+    t0 = time.monotonic()
     deps = check_dependencies(plugin_name, marketplace)
     if "error" in deps:
+        telemetry.send_event("error", plugin_name=plugin_name, error_message=deps["error"], error_context="get_install_plan")
         return {"plugin": plugin_name, "error": deps["error"], "install_order": []}
 
     install_order = []
@@ -188,12 +224,138 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
     required_set = set(deps["missing"])
     _resolve_caps(deps["missing"] + deps["optional_missing"], required_set)
 
-    return {
+    result = {
         "plugin": plugin_name,
         "target_installed": registry.is_plugin_installed(plugin_name),
         "install_order": install_order,
         "already_satisfied": already_satisfied,
         "no_provider_available": no_provider,
+    }
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    telemetry.send_event(
+        "install",
+        plugin_name=plugin_name,
+        providers_selected=[i["plugin"] for i in install_order],
+        capabilities_satisfied=already_satisfied,
+        capabilities_missing=no_provider,
+        duration_ms=duration_ms,
+    )
+    return result
+
+
+def get_uninstall_plan(plugin_name: str, marketplace: str = "softwaresoftware-plugins") -> dict:
+    """Generate an uninstall plan for a plugin and its orphaned dependencies.
+
+    Identifies which dependencies were installed to support this plugin and can
+    be safely removed — i.e., no other installed plugin requires the capability
+    they provide.
+
+    Returns:
+        {
+            "plugin": str,
+            "remove_order": list[dict],  — ordered list of what to remove (dependents first)
+            "kept_deps": list[dict],     — deps kept because other plugins need them
+        }
+    """
+    plugin = registry.find_marketplace_plugin(plugin_name, marketplace)
+    if not plugin:
+        return {
+            "plugin": plugin_name,
+            "error": f"Plugin '{plugin_name}' not found in marketplace",
+            "remove_order": [],
+        }
+
+    if not registry.is_plugin_installed(plugin_name):
+        return {
+            "plugin": plugin_name,
+            "error": f"Plugin '{plugin_name}' is not installed",
+            "remove_order": [],
+        }
+
+    installed = registry.get_installed_plugins()
+    all_plugins = registry.get_marketplace_plugins(marketplace)
+
+    # Build set of installed plugin names (excluding the target)
+    installed_names = {k.split("@")[0] for k in installed}
+    other_installed = installed_names - {plugin_name}
+
+    # Find all capabilities the target plugin requires/optionally uses
+    target_caps = plugin.get("requires", []) + plugin.get("optional", [])
+
+    remove_order = [{"plugin": plugin_name, "reason": "target plugin"}]
+    kept_deps = []
+    checked = {plugin_name}
+
+    def _find_orphaned_deps(caps, excluding):
+        """Find installed providers for caps that no other plugin needs."""
+        for cap in caps:
+            # Find the installed provider for this capability
+            providers = registry.get_providers(cap, marketplace)
+            installed_provider = None
+            for p in providers:
+                if p["name"] in installed_names and p["name"] not in excluding:
+                    installed_provider = p
+                    break
+
+            if not installed_provider:
+                continue
+
+            pname = installed_provider["name"]
+            if pname in checked:
+                continue
+            checked.add(pname)
+
+            # Check if any OTHER installed plugin (not being removed) needs this cap
+            plugins_being_removed = {r["plugin"] for r in remove_order}
+            remaining = other_installed - plugins_being_removed
+
+            needed_by_others = False
+            for other_name in remaining:
+                other_plugin = registry.find_marketplace_plugin(other_name, marketplace)
+                if not other_plugin:
+                    continue
+                other_caps = (
+                    other_plugin.get("requires", [])
+                    + other_plugin.get("optional", [])
+                )
+                if cap in other_caps:
+                    needed_by_others = True
+                    break
+
+            if needed_by_others:
+                kept_deps.append({
+                    "plugin": pname,
+                    "capability": cap,
+                    "reason": f"Still needed by other installed plugins",
+                })
+            else:
+                remove_order.append({
+                    "plugin": pname,
+                    "capability": cap,
+                    "reason": f"Orphaned — provided '{cap}' only for {plugin_name}",
+                })
+                # Recursively check this provider's own deps
+                provider_entry = registry.find_marketplace_plugin(pname, marketplace)
+                if provider_entry:
+                    sub_caps = (
+                        provider_entry.get("requires", [])
+                        + provider_entry.get("optional", [])
+                    )
+                    if sub_caps:
+                        _find_orphaned_deps(sub_caps, checked)
+
+    _find_orphaned_deps(target_caps, checked)
+
+    telemetry.send_event(
+        "uninstall",
+        plugin_name=plugin_name,
+        plugins_removed=[r["plugin"] for r in remove_order],
+        plugins_kept=[k["plugin"] for k in kept_deps],
+    )
+    return {
+        "plugin": plugin_name,
+        "remove_order": remove_order,
+        "kept_deps": kept_deps,
     }
 
 

@@ -15,5 +15,13 @@
       "args": ["${CLAUDE_PLUGIN_ROOT}/server.py"],
       "cwd": "${CLAUDE_PLUGIN_ROOT}"
     }
+  },
+  "userConfig": {
+    "telemetry": {
+      "title": "Send Anonymous Telemetry",
+      "description": "Help improve softwaresoftware by sending anonymous install/resolve events. No personal data is collected.",
+      "type": "boolean",
+      "default": true
+    }
   }
 }

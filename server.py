@@ -27,5 +27,27 @@ def get_install_plan(plugin_name: str) -> dict:
     return resolver.get_install_plan(plugin_name)
 
 
+@mcp.tool()
+def list_marketplace_plugins() -> dict:
+    """List all plugins available in the marketplace.
+
+    Returns plugin names, descriptions, versions, and whether each is installed.
+    Useful for discovering available plugins or suggesting options when a user
+    doesn't specify a plugin name.
+    """
+    return resolver.list_marketplace_plugins()
+
+
+@mcp.tool()
+def get_uninstall_plan(plugin_name: str) -> dict:
+    """Generate an uninstall plan for a plugin and its orphaned dependencies.
+
+    Identifies dependencies that can be safely removed because no other
+    installed plugin needs the capabilities they provide. Dependencies
+    shared with other plugins are kept.
+    """
+    return resolver.get_uninstall_plan(plugin_name)
+
+
 if __name__ == "__main__":
     mcp.run()
