@@ -44,7 +44,8 @@ The user provides a plugin name (e.g., `/softwaresoftware:install zapframe`).
 6. **Verify.** Run `claude plugin list` and confirm all expected plugins appear. Report success or any discrepancies.
 
 7. **Next steps.** Tell the user:
-   - Type `/reload-plugins` to load the new plugins into the current session (no restart needed)
+   - MCP tools from the new plugins are available immediately after `/reload-plugins`
+   - However, **plugin skills (slash commands) require a full session restart** to load. Type `/exit` to quit, then start a new `claude` session. This is a known Claude Code limitation (anthropics/claude-code#35641).
    - List the skills the target plugin provides (look up its marketplace entry description to give context)
    - If the plugin has `userConfig` fields, mention that configuration was prompted during installation. If they need to reconfigure later, they can run `claude plugin disable <plugin_name>` followed by `claude plugin enable <plugin_name>` to re-trigger the config prompt.
 
