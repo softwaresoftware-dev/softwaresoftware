@@ -1,7 +1,7 @@
 {
   "name": "softwaresoftware",
   "description": "Plugin dependency resolver — detects environment, resolves capabilities, auto-selects providers, generates install plans",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": {
     "name": "Thatcher",
     "url": "https://github.com/ThatcherT"
