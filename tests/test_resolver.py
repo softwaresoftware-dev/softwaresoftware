@@ -101,6 +101,41 @@ def test_get_install_plan_transitive(mock_home, marketplace_json, monkeypatch):
     assert names.index("test-daemon") < names.index("test-browser")
 
 
+def test_resolve_external_ranked_after_local(mock_home, marketplace_json_with_external, monkeypatch):
+    """External providers should rank after local ones when both match."""
+    import probes
+    # darwin so local-browser matches, npx so ext-playwright also matches
+    monkeypatch.setattr(probes, "probe_os", lambda: "darwin")
+    monkeypatch.setattr(probes, "probe_binary", lambda name: True)
+
+    providers = resolver.resolve("browser-automation")
+    local = [p for p in providers if not p.get("external")]
+    external = [p for p in providers if p.get("external")]
+    assert len(local) >= 1
+    assert len(external) >= 1
+    # Both match, but local should come before external
+    first_external_idx = next(i for i, p in enumerate(providers) if p.get("external"))
+    first_local_idx = next(i for i, p in enumerate(providers) if not p.get("external"))
+    assert first_local_idx < first_external_idx
+
+
+def test_install_plan_external_has_registry(mock_home, marketplace_json_with_external, monkeypatch):
+    """Install plan entries for external providers should include registry info."""
+    import probes
+    monkeypatch.setattr(probes, "probe_os", lambda: "linux")
+    monkeypatch.setattr(probes, "probe_binary", lambda name: name == "npx")
+
+    plan = resolver.get_install_plan("test-needs-browser")
+    assert len(plan["install_order"]) >= 1
+    ext_entry = next(
+        (e for e in plan["install_order"] if e.get("external")),
+        None,
+    )
+    assert ext_entry is not None
+    assert ext_entry["registry"] == "claude-plugins-official"
+    assert ext_entry["capability"] == "browser-automation"
+
+
 def test_get_install_plan_transitive_no_duplicates(mock_home, marketplace_json, monkeypatch):
     """Transitive resolution should not produce duplicate entries."""
     import probes

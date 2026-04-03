@@ -35,21 +35,23 @@ The user provides a plugin name (e.g., `/softwaresoftware:install zapframe`).
 
 4. **Show the plan.** Present what will be installed as a markdown table:
 
-   | # | Plugin | Capability | Status | Required |
-   |---|--------|------------|--------|----------|
-   | — | (name) | (what it provides) | already satisfied / to install | yes / optional |
-   | last | target plugin | — | to install | — |
+   | # | Plugin | Capability | Source | Status | Required |
+   |---|--------|------------|--------|--------|----------|
+   | — | (name) | (what it provides) | softwaresoftware-plugins / claude-plugins-official | already satisfied / to install | yes / optional |
+   | last | target plugin | — | softwaresoftware-plugins | to install | — |
 
    - Already-satisfied capabilities show as "already satisfied" in the Status column
    - Plugins to install show as "to install" with their install order number
+   - External plugins (with `"external": true`) show their registry name in the Source column; local plugins show "softwaresoftware-plugins"
    - The target plugin is the last row, unless `target_installed` is true
-   - Include a one-line summary below the table (e.g., "2 to install, 1 already satisfied")
+   - Include a one-line summary below the table (e.g., "2 to install (1 external), 1 already satisfied")
 
 5. **Ask for confirmation.** Wait for explicit user approval before installing anything.
 
 6. **Create tasks and install.** After confirmation, create a task for each plugin to install (dependencies + target). Each task should be named like "Install dockside (docker-dev-environment)". Then work through them in order:
    - Set the task to in_progress
-   - Run `claude plugin install <plugin_name>`
+   - **External plugins** (install plan entry has `"external": true`): Run `claude plugin install <plugin_name>@<registry>` where `<registry>` is the entry's `registry` field (e.g., `claude-plugins-official`)
+   - **Local plugins**: Run `claude plugin install <plugin_name>` as before
    - If successful, mark the task completed
    - If it fails, mark the task as errored and stop — don't continue with remaining installs
 

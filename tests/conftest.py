@@ -127,6 +127,50 @@ def marketplace_json(mock_home):
 
 
 @pytest.fixture
+def marketplace_json_with_external(mock_home):
+    """Write a marketplace.json with local and external providers for the same capability."""
+    mp_path = mock_home / ".claude" / "plugins" / "marketplaces" / "softwaresoftware-plugins" / ".claude-plugin" / "marketplace.json"
+    data = {
+        "name": "softwaresoftware-plugins",
+        "plugins": [
+            {
+                "name": "test-needs-browser",
+                "source": {"source": "github", "repo": "ThatcherT/test-needs-browser"},
+                "description": "App that needs browser automation",
+                "version": "1.0.0",
+                "requires": ["browser-automation"],
+                "optional": [],
+                "provides": [],
+                "environment": {},
+            },
+            {
+                "name": "local-browser",
+                "source": {"source": "github", "repo": "ThatcherT/local-browser"},
+                "description": "Local browser automation provider",
+                "version": "1.0.0",
+                "requires": [],
+                "optional": [],
+                "provides": ["browser-automation"],
+                "environment": {"os": "darwin"},
+            },
+            {
+                "name": "ext-playwright",
+                "source": {"source": "registry", "registry": "claude-plugins-official"},
+                "description": "External Playwright browser automation",
+                "version": "0.0.0",
+                "requires": [],
+                "optional": [],
+                "provides": ["browser-automation"],
+                "environment": {"binary": "npx"},
+                "external": True,
+            },
+        ],
+    }
+    mp_path.write_text(json.dumps(data))
+    return data
+
+
+@pytest.fixture
 def installed_plugins(mock_home):
     """Write an installed_plugins.json with notify-linux installed."""
     install_path = mock_home / ".claude" / "plugins" / "cache" / "softwaresoftware-plugins" / "notify-linux" / "2.0.0"

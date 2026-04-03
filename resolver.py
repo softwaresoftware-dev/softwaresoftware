@@ -23,7 +23,7 @@ def list_marketplace_plugins(marketplace: str = "softwaresoftware-plugins") -> d
     all_plugins = registry.get_marketplace_plugins(marketplace)
     plugins = []
     for p in all_plugins:
-        plugins.append({
+        entry = {
             "name": p["name"],
             "description": p.get("description", ""),
             "version": p.get("version", ""),
@@ -31,7 +31,11 @@ def list_marketplace_plugins(marketplace: str = "softwaresoftware-plugins") -> d
             "category": p.get("category", ""),
             "provides": p.get("provides", []),
             "requires": p.get("requires", []),
-        })
+        }
+        if p.get("external"):
+            entry["external"] = True
+            entry["registry"] = p.get("source", {}).get("registry", "claude-plugins-official")
+        plugins.append(entry)
     return {"marketplace": marketplace, "plugins": plugins}
 
 
@@ -146,10 +150,12 @@ def resolve(capability: str, marketplace: str = "softwaresoftware-plugins") -> l
             "match": all_match,
             "match_details": match_details,
             "installed": registry.is_plugin_installed(provider["name"]),
+            "external": provider.get("external", False),
+            "source": provider.get("source", {}),
         })
 
-    # Sort: matched first, then installed first
-    ranked.sort(key=lambda p: (not p["match"], not p["installed"]))
+    # Sort: matched first, then local before external, then installed first
+    ranked.sort(key=lambda p: (not p["match"], p.get("external", False), not p["installed"]))
     return ranked
 
 
@@ -211,12 +217,16 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
 
                 if best["name"] not in planned:
                     planned.add(best["name"])
-                    install_order.append({
+                    entry = {
                         "plugin": best["name"],
                         "capability": cap,
                         "reason": f"Provides '{cap}' — best environment match",
                         "required": cap in required_caps,
-                    })
+                    }
+                    if best.get("external"):
+                        entry["external"] = True
+                        entry["registry"] = best.get("source", {}).get("registry", "claude-plugins-official")
+                    install_order.append(entry)
             elif not any(p["installed"] for p in providers):
                 if cap not in no_provider:
                     no_provider.append(cap)
