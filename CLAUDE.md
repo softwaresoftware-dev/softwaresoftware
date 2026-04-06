@@ -1,6 +1,6 @@
 # CLAUDE.md — softwaresoftware
 
-Plugin dependency resolver for Claude Code. Detects environment, resolves capabilities to providers, auto-selects based on environment probes, generates install plans.
+Plugin installer for Claude Code. Detects environment, resolves capabilities to providers, auto-selects based on environment probes, generates install plans.
 
 ## Quick Reference
 
