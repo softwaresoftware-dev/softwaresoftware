@@ -42,11 +42,9 @@ claude --plugin-dir /home/thatcher/projects/softwaresoftware/projects/plugins/ma
 
 ## Capability System
 
-Plugins declare dependencies on capabilities — semantic contracts that providers satisfy.
+Plugins declare dependencies on capabilities — semantic contracts that providers satisfy. Full reference: **[docs/capability-contracts.md](docs/capability-contracts.md)** — covers marketplace fields, environment probes, resolution algorithm, and how to write providers/consumers.
 
 **How it works:** A plugin's marketplace.json entry has `requires: ["notification"]`. `check_dependencies` reads this, finds providers that have `provides: ["notification"]`, runs environment probes against each provider's `environment` conditions, and auto-selects the best match.
-
-**Marketplace fields per plugin:** `requires`, `optional`, `provides`, `built_in_capabilities`, `environment` (probe conditions for auto-selection).
 
 **Consumer skills use intent, not tool names.** Instead of hardcoding `send_notification(...)`, consumer skills say "Use the notification capability to alert the user with message X and urgency Y." Claude figures out which installed tool satisfies the capability and calls it.
 
