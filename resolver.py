@@ -10,12 +10,20 @@ import probes
 import registry
 import telemetry
 
-# Third-party MCPs that can satisfy capabilities without a marketplace plugin.
-# Key: MCP server name (as it appears in settings.json mcpServers).
-# Value: list of capabilities the MCP satisfies when loaded.
-KNOWN_MCP_CAPABILITIES = {
-    "slack": ["channel", "notification"],
-    "gmail": ["notification"],
+# Third-party MCPs that can satisfy capabilities. When loaded, the resolver
+# treats the capability as satisfied. When not loaded, the resolver includes
+# them as installable candidates with user instructions.
+KNOWN_MCP_PROVIDERS = {
+    "slack": {
+        "capabilities": ["channel", "notification"],
+        "install": "claude mcp add --transport http --scope user slack https://mcp.slack.com/mcp",
+        "description": "Official Slack MCP — send messages to Slack channels and DMs",
+    },
+    "gmail": {
+        "capabilities": ["notification"],
+        "install": "claude mcp add gmail",
+        "description": "Gmail MCP — send email notifications",
+    },
 }
 
 
@@ -24,10 +32,28 @@ def _mcp_satisfies(capability: str) -> str | None:
 
     Returns the MCP name if satisfied, None otherwise.
     """
-    for mcp_name, caps in KNOWN_MCP_CAPABILITIES.items():
-        if capability in caps and probes.probe_mcp(mcp_name):
+    for mcp_name, info in KNOWN_MCP_PROVIDERS.items():
+        if capability in info["capabilities"] and probes.probe_mcp(mcp_name):
             return mcp_name
     return None
+
+
+def _mcp_candidates(capability: str) -> list[dict]:
+    """Get known MCP providers that could satisfy a capability (loaded or not).
+
+    Returns list of candidate dicts compatible with the install plan format.
+    """
+    candidates = []
+    for mcp_name, info in KNOWN_MCP_PROVIDERS.items():
+        if capability in info["capabilities"]:
+            candidates.append({
+                "name": mcp_name,
+                "description": info["description"],
+                "install_command": info["install"],
+                "mcp_provider": True,
+                "loaded": probes.probe_mcp(mcp_name),
+            })
+    return candidates
 
 
 def list_marketplace_plugins(marketplace: str = "softwaresoftware-plugins") -> dict:
@@ -257,7 +283,22 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
                         entry["registry"] = best.get("registry", "claude-plugins-official")
                     install_order.append(entry)
             elif not any(p["installed"] for p in providers):
-                if cap not in no_provider:
+                # Check if a known third-party MCP could satisfy this
+                mcp_opts = _mcp_candidates(cap)
+                if mcp_opts:
+                    best_mcp = mcp_opts[0]
+                    if best_mcp["name"] not in planned:
+                        planned.add(best_mcp["name"])
+                        install_order.append({
+                            "plugin": best_mcp["name"],
+                            "capability": cap,
+                            "reason": f"Provides '{cap}' — third-party MCP",
+                            "required": cap in required_caps,
+                            "mcp_provider": True,
+                            "install_command": best_mcp["install_command"],
+                            "description": best_mcp["description"],
+                        })
+                elif cap not in no_provider:
                     no_provider.append(cap)
 
     required_set = set(deps["missing"])

@@ -43,6 +43,7 @@ The user provides a plugin name (e.g., `/softwaresoftware:install zapframe`).
    - Already-satisfied capabilities show as "already satisfied" in the Status column
    - Plugins to install show as "to install" with their install order number
    - External plugins (with `"external": true`) show their registry name in the Source column; local plugins show "softwaresoftware-plugins"
+   - MCP providers (with `"mcp_provider": true`) show "third-party MCP" in the Source column and include the install command
    - The target plugin is the last row, unless `target_installed` is true
    - Include a one-line summary below the table (e.g., "2 to install (1 external), 1 already satisfied")
 
@@ -56,6 +57,7 @@ The user provides a plugin name (e.g., `/softwaresoftware:install zapframe`).
 
 7. **Create tasks and install.** After confirmation, create a task for each plugin to install (dependencies + target). Each task should be named like "Install dockside (docker-dev-environment)". Then work through them in order:
    - Set the task to in_progress
+   - **MCP providers** (install plan entry has `"mcp_provider": true`): Show the user the install command from the `install_command` field and tell them to run it in their terminal. Example: "Run this in your terminal: `claude mcp add --transport http --scope user slack https://mcp.slack.com/mcp`". Then mark the task completed — the MCP will be available after the session restarts.
    - **External plugins** (install plan entry has `"external": true`): Run `claude plugin install <plugin_name>@<registry>` where `<registry>` is the entry's `registry` field (e.g., `claude-plugins-official`)
    - **Local plugins**: Run `claude plugin install <plugin_name>` as before
    - If successful, mark the task completed

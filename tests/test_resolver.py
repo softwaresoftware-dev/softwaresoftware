@@ -185,3 +185,21 @@ def test_mcp_satisfies_not_loaded(mock_home, marketplace_json, monkeypatch):
     assert any(i["plugin"] == "notify-linux" for i in plan["install_order"])
 
 
+def test_mcp_provider_in_install_plan(mock_home, marketplace_json, monkeypatch):
+    """When no marketplace provider matches but a known MCP can satisfy, include it."""
+    import probes
+    monkeypatch.setattr(probes, "probe_mcp", lambda name: False)
+    # No OS match for any marketplace notification provider
+    monkeypatch.setattr(probes, "probe_os", lambda: "freebsd")
+    monkeypatch.setattr(probes, "probe_binary", lambda name: False)
+
+    plan = resolver.get_install_plan("cardwatch")
+    mcp_entries = [i for i in plan["install_order"] if i.get("mcp_provider")]
+    assert len(mcp_entries) >= 1
+    slack_entry = next((e for e in mcp_entries if e["plugin"] == "slack"), None)
+    if slack_entry:
+        assert slack_entry["mcp_provider"] is True
+        assert "install_command" in slack_entry
+        assert slack_entry["capability"] == "notification"
+
+
