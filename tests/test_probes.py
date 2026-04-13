@@ -1,5 +1,7 @@
 """Tests for probes.py — generic environment detection primitives."""
 
+import json
+
 import probes
 
 
@@ -27,6 +29,30 @@ def test_probe_plugin(mock_home, installed_plugins):
 
 def test_probe_mcp_from_installed(mock_home, installed_plugins):
     assert probes.probe_mcp("notify-linux") is True
+    assert probes.probe_mcp("nonexistent") is False
+
+
+def test_probe_mcp_from_settings_local(mock_home):
+    """MCPs registered in settings.local.json are detected."""
+    settings_local = mock_home / ".claude" / "settings.local.json"
+    settings_local.write_text(json.dumps({
+        "mcpServers": {
+            "slack": {"command": "npx", "args": ["-y", "@anthropic/slack-mcp"]},
+        }
+    }))
+    assert probes.probe_mcp("slack") is True
+    assert probes.probe_mcp("nonexistent") is False
+
+
+def test_probe_mcp_from_claude_json(mock_home):
+    """MCPs registered in ~/.claude.json are detected."""
+    claude_json = mock_home / ".claude.json"
+    claude_json.write_text(json.dumps({
+        "mcpServers": {
+            "gmail-organizer": {"command": "node", "args": ["server.js"]},
+        }
+    }))
+    assert probes.probe_mcp("gmail-organizer") is True
     assert probes.probe_mcp("nonexistent") is False
 
 

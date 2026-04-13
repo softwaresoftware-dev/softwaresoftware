@@ -51,7 +51,7 @@ def probe_env(name: str) -> bool:
 
 
 def probe_mcp(name: str) -> bool:
-    """Check if an MCP server is configured (in installed plugins or settings.json)."""
+    """Check if an MCP server is configured in any user-scope location."""
     # Check installed plugins for mcpServers
     installed_path = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
     if installed_path.exists():
@@ -69,15 +69,25 @@ def probe_mcp(name: str) -> bool:
         except (json.JSONDecodeError, KeyError):
             pass
 
-    # Check settings.json for manual MCP configs
-    settings_path = Path.home() / ".claude" / "settings.json"
-    if settings_path.exists():
-        try:
-            settings = json.loads(settings_path.read_text())
-            if name in settings.get("mcpServers", {}):
-                return True
-        except (json.JSONDecodeError, KeyError):
-            pass
+    # Check all user-scope settings files for manual MCP configs
+    # Claude Code reads mcpServers from multiple locations:
+    #   ~/.claude.json              — primary user config
+    #   ~/.claude/settings.json     — user settings
+    #   ~/.claude/settings.local.json — local overrides (not committed)
+    home = Path.home()
+    settings_paths = [
+        home / ".claude.json",
+        home / ".claude" / "settings.json",
+        home / ".claude" / "settings.local.json",
+    ]
+    for settings_path in settings_paths:
+        if settings_path.exists():
+            try:
+                settings = json.loads(settings_path.read_text())
+                if name in settings.get("mcpServers", {}):
+                    return True
+            except (json.JSONDecodeError, KeyError):
+                pass
 
     return False
 
