@@ -56,32 +56,48 @@ def _mcp_candidates(capability: str) -> list[dict]:
     return candidates
 
 
-def list_marketplace_plugins(marketplace: str = "softwaresoftware-plugins") -> dict:
-    """List all plugins available in the marketplace with install status.
+def list_marketplace_plugins(marketplace: str | None = None) -> dict:
+    """List all plugins available across marketplaces with install status.
+
+    Args:
+        marketplace: Specific marketplace to list, or None for all marketplaces.
 
     Returns:
         {
-            "marketplace": str,
-            "plugins": list[dict],  — name, description, version, installed, category
+            "marketplaces": list[str],
+            "plugins": list[dict],  — name, description, version, installed, category, marketplace
         }
     """
-    all_plugins = registry.get_marketplace_plugins(marketplace)
+    if marketplace:
+        marketplaces = [marketplace]
+    else:
+        marketplaces = registry.get_all_marketplaces()
+
     plugins = []
-    for p in all_plugins:
-        entry = {
-            "name": p["name"],
-            "description": p.get("description", ""),
-            "version": p.get("version", ""),
-            "installed": registry.is_plugin_installed(p["name"]),
-            "category": p.get("category", ""),
-            "provides": p.get("provides", []),
-            "requires": p.get("requires", []),
-        }
-        if p.get("external"):
-            entry["external"] = True
-            entry["registry"] = p.get("registry", "claude-plugins-official")
-        plugins.append(entry)
-    return {"marketplace": marketplace, "plugins": plugins}
+    seen = set()  # avoid duplicates if a plugin appears in multiple marketplaces
+    for mp in marketplaces:
+        for p in registry.get_marketplace_plugins(mp):
+            name = p["name"]
+            if name in seen:
+                continue
+            seen.add(name)
+            entry = {
+                "name": name,
+                "description": p.get("description", ""),
+                "version": p.get("version", ""),
+                "installed": registry.is_plugin_installed(name),
+                "category": p.get("category", ""),
+                "marketplace": mp,
+            }
+            # Only include capability fields for softwaresoftware plugins
+            if mp == "softwaresoftware-plugins":
+                entry["provides"] = p.get("provides", [])
+                entry["requires"] = p.get("requires", [])
+                if p.get("external"):
+                    entry["external"] = True
+                    entry["registry"] = p.get("registry", "claude-plugins-official")
+            plugins.append(entry)
+    return {"marketplaces": marketplaces, "plugins": plugins}
 
 
 def check_dependencies(plugin_name: str, marketplace: str = "softwaresoftware-plugins") -> dict:
@@ -208,12 +224,16 @@ def resolve(capability: str, marketplace: str = "softwaresoftware-plugins") -> l
     return ranked
 
 
-def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plugins") -> dict:
+def get_install_plan(plugin_name: str, marketplace: str | None = None) -> dict:
     """Generate an ordered install plan for a plugin and its dependencies.
 
-    Auto-selects the best provider for each missing capability.
-    Transitively resolves dependencies of selected providers.
+    For softwaresoftware-plugins: auto-selects the best provider for each missing
+    capability. Transitively resolves dependencies of selected providers.
     Install order is topologically sorted — dependencies before dependents.
+
+    For other marketplaces: passthrough install with no capability resolution.
+
+    Supports 'name@marketplace' syntax to target a specific marketplace.
 
     Returns:
         {
@@ -221,10 +241,57 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
             "install_order": list[dict],  — ordered list of what to install
             "already_satisfied": list[str],
             "no_provider_available": list[str],  — capabilities with no matching provider
+            "marketplace": str,  — source marketplace
         }
     """
     t0 = time.monotonic()
-    deps = check_dependencies(plugin_name, marketplace)
+
+    # Resolve which marketplace the plugin belongs to
+    if marketplace:
+        resolved_marketplace = marketplace
+    else:
+        _, resolved_marketplace = registry.find_plugin_any_marketplace(plugin_name)
+        # Strip @marketplace from name if present
+        if "@" in plugin_name:
+            plugin_name = plugin_name.rsplit("@", 1)[0]
+
+    if not resolved_marketplace:
+        telemetry.send_event("error", plugin_name=plugin_name, error_message="Plugin not found in any marketplace", error_context="get_install_plan")
+        return {"plugin": plugin_name, "error": f"Plugin '{plugin_name}' not found in any installed marketplace", "install_order": []}
+
+    # Non-softwaresoftware marketplaces: passthrough install, no capability resolution
+    if resolved_marketplace != "softwaresoftware-plugins":
+        is_installed = registry.is_plugin_installed(plugin_name)
+        install_order = []
+        if not is_installed:
+            install_order.append({
+                "plugin": plugin_name,
+                "capability": None,
+                "reason": f"Direct install from {resolved_marketplace}",
+                "required": True,
+                "passthrough": True,
+                "marketplace": resolved_marketplace,
+            })
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        telemetry.send_event(
+            "install",
+            plugin_name=plugin_name,
+            providers_selected=[plugin_name] if install_order else [],
+            capabilities_satisfied=[],
+            capabilities_missing=[],
+            duration_ms=duration_ms,
+        )
+        return {
+            "plugin": plugin_name,
+            "target_installed": is_installed,
+            "install_order": install_order,
+            "already_satisfied": [],
+            "no_provider_available": [],
+            "marketplace": resolved_marketplace,
+        }
+
+    # softwaresoftware-plugins: full capability resolution
+    deps = check_dependencies(plugin_name, resolved_marketplace)
     if "error" in deps:
         telemetry.send_event("error", plugin_name=plugin_name, error_message=deps["error"], error_context="get_install_plan")
         return {"plugin": plugin_name, "error": deps["error"], "install_order": []}
@@ -251,7 +318,7 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
                 already_satisfied.append(cap)
                 continue
 
-            providers = resolve(cap, marketplace)
+            providers = resolve(cap, resolved_marketplace)
             matched = [p for p in providers if p["match"] and not p["installed"]]
 
             if matched:
@@ -260,7 +327,7 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
                     continue
 
                 # Recursively resolve this provider's dependencies first
-                provider_plugin = registry.find_marketplace_plugin(best["name"], marketplace)
+                provider_plugin = registry.find_marketplace_plugin(best["name"], resolved_marketplace)
                 if provider_plugin:
                     provider_requires = provider_plugin.get("requires", [])
                     provider_optional = provider_plugin.get("optional", [])
@@ -310,7 +377,7 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
         if entry.get("external"):
             reg_name = entry.get("registry", "")
             if reg_name and reg_name not in external_registries:
-                all_registries = registry.get_external_registries(marketplace)
+                all_registries = registry.get_external_registries(resolved_marketplace)
                 reg_info = all_registries.get(reg_name)
                 if reg_info:
                     external_registries[reg_name] = reg_info
@@ -321,6 +388,7 @@ def get_install_plan(plugin_name: str, marketplace: str = "softwaresoftware-plug
         "install_order": install_order,
         "already_satisfied": already_satisfied,
         "no_provider_available": no_provider,
+        "marketplace": resolved_marketplace,
     }
     if external_registries:
         result["external_registries"] = external_registries

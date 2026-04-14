@@ -91,6 +91,65 @@ def get_external_registries(marketplace: str = "softwaresoftware-plugins") -> di
     return data.get("external_registries", {})
 
 
+def get_all_marketplaces() -> list[str]:
+    """Discover all installed marketplace names by scanning the marketplaces directory.
+
+    Returns:
+        List of marketplace directory names (e.g. ["softwaresoftware-plugins", "claude-plugins-official"]).
+    """
+    if not MARKETPLACES_DIR.exists():
+        return []
+    return sorted(
+        d.name for d in MARKETPLACES_DIR.iterdir()
+        if d.is_dir() and (d / ".claude-plugin" / "marketplace.json").exists()
+    )
+
+
+def get_marketplace_name(marketplace: str) -> str:
+    """Read the display name from a marketplace's marketplace.json.
+
+    Returns:
+        The marketplace name field, or the directory name as fallback.
+    """
+    mp_path = MARKETPLACES_DIR / marketplace / ".claude-plugin" / "marketplace.json"
+    data = _read_json(mp_path)
+    if not data or not isinstance(data, dict):
+        return marketplace
+    return data.get("name", marketplace)
+
+
+def find_plugin_any_marketplace(name: str) -> tuple[dict, str] | tuple[None, None]:
+    """Find a plugin across all installed marketplaces.
+
+    Supports 'name@marketplace' syntax to target a specific marketplace.
+
+    Returns:
+        (plugin_dict, marketplace_name) or (None, None) if not found.
+    """
+    # Handle name@marketplace syntax
+    if "@" in name:
+        plugin_name, marketplace = name.rsplit("@", 1)
+        plugin = find_marketplace_plugin(plugin_name, marketplace)
+        if plugin:
+            return plugin, marketplace
+        return None, None
+
+    # Search softwaresoftware-plugins first (gets full capability resolution)
+    plugin = find_marketplace_plugin(name, "softwaresoftware-plugins")
+    if plugin:
+        return plugin, "softwaresoftware-plugins"
+
+    # Search all other marketplaces
+    for mp in get_all_marketplaces():
+        if mp == "softwaresoftware-plugins":
+            continue
+        plugin = find_marketplace_plugin(name, mp)
+        if plugin:
+            return plugin, mp
+
+    return None, None
+
+
 def find_marketplace_plugin(name: str, marketplace: str = "softwaresoftware-plugins") -> dict | None:
     """Find a plugin entry in the marketplace by name.
 

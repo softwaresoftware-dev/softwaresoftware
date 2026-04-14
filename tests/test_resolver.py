@@ -203,3 +203,116 @@ def test_mcp_provider_in_install_plan(mock_home, marketplace_json, monkeypatch):
         assert slack_entry["capability"] == "notification"
 
 
+# --- Multi-marketplace tests ---
+
+
+def test_list_all_marketplaces(mock_home, marketplace_json, other_marketplace):
+    """list_marketplace_plugins with no args returns plugins from all marketplaces."""
+    result = resolver.list_marketplace_plugins()
+    assert "softwaresoftware-plugins" in result["marketplaces"]
+    assert "other-plugins" in result["marketplaces"]
+    names = [p["name"] for p in result["plugins"]]
+    # Should include plugins from both marketplaces
+    assert "cardwatch" in names
+    assert "cool-tool" in names
+
+
+def test_list_single_marketplace(mock_home, marketplace_json, other_marketplace):
+    """list_marketplace_plugins with a specific marketplace only returns those plugins."""
+    result = resolver.list_marketplace_plugins("other-plugins")
+    assert result["marketplaces"] == ["other-plugins"]
+    names = [p["name"] for p in result["plugins"]]
+    assert "cool-tool" in names
+    assert "cardwatch" not in names
+
+
+def test_list_plugins_have_marketplace_field(mock_home, marketplace_json, other_marketplace):
+    """Each plugin entry should include its source marketplace."""
+    result = resolver.list_marketplace_plugins()
+    for p in result["plugins"]:
+        assert "marketplace" in p
+    cardwatch = next(p for p in result["plugins"] if p["name"] == "cardwatch")
+    assert cardwatch["marketplace"] == "softwaresoftware-plugins"
+    cool_tool = next(p for p in result["plugins"] if p["name"] == "cool-tool")
+    assert cool_tool["marketplace"] == "other-plugins"
+
+
+def test_list_no_duplicates(mock_home, marketplace_json, other_marketplace):
+    """Plugins should not appear twice even if name collides across marketplaces."""
+    result = resolver.list_marketplace_plugins()
+    names = [p["name"] for p in result["plugins"]]
+    assert len(names) == len(set(names))
+
+
+def test_install_plan_passthrough(mock_home, marketplace_json, other_marketplace):
+    """Plugins from non-softwaresoftware marketplaces get a passthrough install plan."""
+    plan = resolver.get_install_plan("cool-tool")
+    assert plan["marketplace"] == "other-plugins"
+    assert len(plan["install_order"]) == 1
+    entry = plan["install_order"][0]
+    assert entry["passthrough"] is True
+    assert entry["marketplace"] == "other-plugins"
+    assert plan["no_provider_available"] == []
+
+
+def test_install_plan_passthrough_already_installed(mock_home, marketplace_json, other_marketplace, monkeypatch):
+    """Passthrough plan for an already-installed plugin has empty install_order."""
+    import registry
+    monkeypatch.setattr(registry, "is_plugin_installed", lambda name: name == "cool-tool")
+    plan = resolver.get_install_plan("cool-tool")
+    assert plan["target_installed"] is True
+    assert plan["install_order"] == []
+
+
+def test_install_plan_at_marketplace_syntax(mock_home, marketplace_json, other_marketplace):
+    """name@marketplace syntax targets the specified marketplace."""
+    plan = resolver.get_install_plan("cool-tool@other-plugins")
+    assert plan["plugin"] == "cool-tool"
+    assert plan["marketplace"] == "other-plugins"
+    assert plan["install_order"][0]["passthrough"] is True
+
+
+def test_install_plan_softwaresoftware_gets_resolution(mock_home, marketplace_json, other_marketplace, monkeypatch):
+    """Plugins from softwaresoftware-plugins still get full capability resolution."""
+    import probes
+    monkeypatch.setattr(probes, "probe_os", lambda: "linux")
+    monkeypatch.setattr(probes, "probe_binary", lambda name: name == "notify-send")
+
+    plan = resolver.get_install_plan("cardwatch")
+    assert plan["marketplace"] == "softwaresoftware-plugins"
+    # Should have capability resolution, not passthrough
+    assert any(e.get("capability") == "notification" for e in plan["install_order"])
+    assert not any(e.get("passthrough") for e in plan["install_order"])
+
+
+def test_install_plan_not_found_anywhere(mock_home, marketplace_json, other_marketplace):
+    """Plugin not in any marketplace returns an error."""
+    plan = resolver.get_install_plan("nonexistent-plugin")
+    assert "error" in plan
+    assert "not found" in plan["error"]
+
+
+def test_softwaresoftware_searched_first(mock_home, marketplace_json, other_marketplace):
+    """When a plugin exists in softwaresoftware-plugins, it should be found there first."""
+    import registry
+    plugin, mp = registry.find_plugin_any_marketplace("cardwatch")
+    assert mp == "softwaresoftware-plugins"
+    assert plugin["name"] == "cardwatch"
+
+
+def test_find_in_other_marketplace(mock_home, marketplace_json, other_marketplace):
+    """Plugins only in other marketplaces are found there."""
+    import registry
+    plugin, mp = registry.find_plugin_any_marketplace("cool-tool")
+    assert mp == "other-plugins"
+    assert plugin["name"] == "cool-tool"
+
+
+def test_find_not_found(mock_home, marketplace_json, other_marketplace):
+    """Plugin not in any marketplace returns (None, None)."""
+    import registry
+    plugin, mp = registry.find_plugin_any_marketplace("nonexistent")
+    assert plugin is None
+    assert mp is None
+
+

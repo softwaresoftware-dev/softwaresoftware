@@ -178,6 +178,32 @@ def marketplace_json_with_external(mock_home):
 
 
 @pytest.fixture
+def other_marketplace(mock_home):
+    """Write a second marketplace (other-plugins) with simple plugins (no capabilities)."""
+    other_dir = mock_home / ".claude" / "plugins" / "marketplaces" / "other-plugins" / ".claude-plugin"
+    other_dir.mkdir(parents=True)
+    data = {
+        "name": "other-plugins",
+        "plugins": [
+            {
+                "name": "cool-tool",
+                "description": "A cool tool from another marketplace",
+                "category": "utilities",
+                "source": {"source": "github", "repo": "someone/cool-tool"},
+            },
+            {
+                "name": "dev-helper",
+                "description": "Development helper",
+                "category": "development",
+                "source": {"source": "github", "repo": "someone/dev-helper"},
+            },
+        ],
+    }
+    (other_dir / "marketplace.json").write_text(json.dumps(data))
+    return data
+
+
+@pytest.fixture
 def installed_plugins(mock_home):
     """Write an installed_plugins.json with notify-linux installed."""
     install_path = mock_home / ".claude" / "plugins" / "cache" / "softwaresoftware-plugins" / "notify-linux" / "2.0.0"

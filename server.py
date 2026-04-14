@@ -20,22 +20,25 @@ def check_dependencies(plugin_name: str) -> dict:
 def get_install_plan(plugin_name: str) -> dict:
     """Generate an ordered install plan for a plugin and its missing dependencies.
 
-    Auto-selects the best provider for each missing capability based on
-    environment probes. Returns install order, already satisfied capabilities,
-    and any capabilities with no available provider.
+    Works across all installed marketplaces. For softwaresoftware plugins,
+    auto-selects the best provider for each missing capability based on
+    environment probes. For plugins from other marketplaces, returns a
+    passthrough install plan.
+
+    Supports 'name@marketplace' syntax to target a specific marketplace.
     """
     return resolver.get_install_plan(plugin_name)
 
 
 @mcp.tool()
-def list_marketplace_plugins() -> dict:
-    """List all plugins available in the marketplace.
+def list_marketplace_plugins(marketplace: str = "") -> dict:
+    """List all plugins available across all installed marketplaces.
 
-    Returns plugin names, descriptions, versions, and whether each is installed.
-    Useful for discovering available plugins or suggesting options when a user
-    doesn't specify a plugin name.
+    Returns plugin names, descriptions, versions, source marketplace, and
+    whether each is installed. Pass a marketplace name to filter to one
+    marketplace, or leave empty to list all.
     """
-    return resolver.list_marketplace_plugins()
+    return resolver.list_marketplace_plugins(marketplace or None)
 
 
 @mcp.tool()
