@@ -394,9 +394,10 @@ def get_install_plan(plugin_name: str, marketplace: str | None = None) -> dict:
                 if reg_info:
                     external_registries[reg_name] = reg_info
 
+    target_installed = registry.is_plugin_installed(plugin_name)
     result = {
         "plugin": plugin_name,
-        "target_installed": registry.is_plugin_installed(plugin_name),
+        "target_installed": target_installed,
         "target_external": target_is_external,
         "target_registry": target_plugin.get("registry", "") if target_is_external else None,
         "install_order": install_order,
@@ -404,6 +405,14 @@ def get_install_plan(plugin_name: str, marketplace: str | None = None) -> dict:
         "no_provider_available": no_provider,
         "marketplace": resolved_marketplace,
     }
+    # When already installed with nothing to do, include post-install info
+    # so the skill can suggest setup if it hasn't been run yet
+    if target_installed and not install_order:
+        skills = registry.get_plugin_skills(plugin_name)
+        result["post_install"] = {
+            "skills": skills,
+            "has_setup": "setup" in skills,
+        }
     if external_registries:
         result["external_registries"] = external_registries
     duration_ms = int((time.monotonic() - t0) * 1000)

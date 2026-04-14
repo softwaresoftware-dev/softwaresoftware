@@ -30,7 +30,7 @@ The user provides a plugin name (e.g., `/softwaresoftware:install zapframe`) or 
    - If the plan has an `error` field and it says the plugin wasn't found, go back to step 1 and show available plugins.
    - If the plan has any other `error`, tell the user and stop.
    - If `no_provider_available` is non-empty, list the unsatisfied capabilities and explain what's missing. Stop — don't partial-install.
-   - If `target_installed` is true AND `install_order` is empty: tell the user the plugin is already installed with all dependencies satisfied. Stop.
+   - If `target_installed` is true AND `install_order` is empty: tell the user the plugin is already installed with all dependencies satisfied. **Then check `post_install`**: if `has_setup` is true, suggest the user run `/<plugin>:setup` — e.g., "You may want to run `/daemon-manager:setup` to configure auto-start on boot." Then stop.
    - If `target_installed` is true but `install_order` has entries: tell the user the plugin is installed but has missing dependencies, then continue to step 4 to install them.
    - If `target_external` is true: the target plugin comes from an external registry. The plan will include `external_registries` with the registry info and `target_registry` with the registry name. The skill must ensure this registry is configured (step 6) before installing the target with `claude plugin install <name>@<registry>`.
 

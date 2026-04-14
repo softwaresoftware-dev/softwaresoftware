@@ -79,6 +79,30 @@ def test_get_install_plan_target_installed(mock_home, marketplace_json, installe
     assert plan["target_installed"] is True
 
 
+def test_get_install_plan_target_installed_has_post_install(mock_home, marketplace_json, installed_plugins):
+    """When target is installed with no deps to add, post_install should include skill info."""
+    # Create a setup skill for notify-linux
+    install_path = mock_home / ".claude" / "plugins" / "cache" / "softwaresoftware-plugins" / "notify-linux" / "2.0.0"
+    setup_dir = install_path / "skills" / "setup"
+    setup_dir.mkdir(parents=True)
+    (setup_dir / "SKILL.md").write_text("# setup")
+
+    plan = resolver.get_install_plan("notify-linux")
+    assert plan["target_installed"] is True
+    assert plan["install_order"] == []
+    assert "post_install" in plan
+    assert plan["post_install"]["has_setup"] is True
+    assert "setup" in plan["post_install"]["skills"]
+
+
+def test_get_install_plan_target_installed_no_setup(mock_home, marketplace_json, installed_plugins):
+    """When target is installed but has no setup skill, post_install.has_setup should be False."""
+    plan = resolver.get_install_plan("notify-linux")
+    assert plan["target_installed"] is True
+    assert "post_install" in plan
+    assert plan["post_install"]["has_setup"] is False
+
+
 def test_get_install_plan_target_not_installed(mock_home, marketplace_json):
     """Plan should report target_installed=False when the plugin is not installed."""
     plan = resolver.get_install_plan("cardwatch")
