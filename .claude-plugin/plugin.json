@@ -7,12 +7,20 @@
     "url": "https://github.com/ThatcherT"
   },
   "repository": "https://github.com/ThatcherT/softwaresoftware",
-  "license": "MIT",
-  "keywords": ["dependencies", "resolver", "capabilities", "framework", "environment"],
+  "license": "Proprietary",
+  "keywords": [
+    "dependencies",
+    "resolver",
+    "capabilities",
+    "framework",
+    "environment"
+  ],
   "mcpServers": {
     "softwaresoftware": {
       "command": "python",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/server.py"],
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server.py"
+      ],
       "cwd": "${CLAUDE_PLUGIN_ROOT}"
     }
   },
