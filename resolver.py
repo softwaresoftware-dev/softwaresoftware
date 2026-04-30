@@ -6,6 +6,7 @@ and auto-selects providers based on environment probes.
 
 import time
 
+import mesh
 import probes
 import registry
 import telemetry
@@ -547,3 +548,45 @@ def _has_installed_provider(capability: str, marketplace: str) -> bool:
     """Check if any installed plugin provides a capability."""
     providers = registry.get_providers(capability, marketplace)
     return any(registry.is_plugin_installed(p["name"]) for p in providers)
+
+
+def _installed_provider_name(capability: str, marketplace: str) -> str | None:
+    """Return the name of the first installed plugin providing a capability."""
+    for p in registry.get_providers(capability, marketplace):
+        if registry.is_plugin_installed(p["name"]):
+            return p["name"]
+    return None
+
+
+def find_satisfier(capability: str, marketplace: str = "softwaresoftware-plugins") -> dict:
+    """Find where a capability will be served at spawn time.
+
+    Resolution order (preference, highest first):
+      1. Locally-installed plugin — no cross-host hop.
+      2. Loaded third-party MCP (Slack, Gmail, ...) — already in this Claude.
+      3. Mesh host advertising the capability — requires forwarding.
+      4. Nothing — capability cannot be served.
+
+    Returns:
+        {"type": "plugin", "name": <plugin-name>}                            — installed plugin
+        {"type": "mcp",    "name": <mcp-name>}                               — loaded MCP
+        {"type": "host",   "host": <hostname>, "self": <bool>}               — mesh host
+        {"type": "none"}                                                     — unsatisfiable
+
+    Self-host as a 'host' result is intentional. The caller (taskpilot)
+    interprets host=self as 'spawn here'; we don't downgrade to type=none
+    just because the local install lacks a plugin satisfier.
+    """
+    plugin_name = _installed_provider_name(capability, marketplace)
+    if plugin_name:
+        return {"type": "plugin", "name": plugin_name}
+
+    mcp_name = _mcp_satisfies(capability)
+    if mcp_name:
+        return {"type": "mcp", "name": mcp_name}
+
+    for host in mesh.list_hosts():
+        if capability in (host.get("capabilities") or []):
+            return {"type": "host", "host": host["host"], "self": bool(host.get("self"))}
+
+    return {"type": "none"}
