@@ -33,6 +33,7 @@ Every plugin in `marketplace.json` can use these capability-related fields:
 | `built_in_capabilities` | `string[]` | consumers | Capabilities the plugin handles internally. The resolver skips dependency resolution for these. |
 | `environment` | `object` | providers | Probe conditions that determine if this provider works in the user's environment. All conditions must match for auto-selection. |
 | `category` | `string` | all | One of: `development`, `research`, `utilities`, `provider`, `framework`, `toolkit`. Providers should use `"provider"`. |
+| `retain_on_orphan` | `boolean` | providers | If `true`, the uninstall planner never auto-removes this plugin when it becomes orphaned. Set it on providers that hold user data or run live services the resolver can't see (vaults, event routers, dashboards, daemons, long-running sessions). Such a provider lands in `kept_deps` with a "stateful/shared infra" reason; the user must uninstall it explicitly. |
 
 ## Environment probes
 

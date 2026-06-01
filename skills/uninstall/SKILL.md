@@ -25,9 +25,11 @@ The user provides a plugin name (e.g., `/softwaresoftware:uninstall liteframe`).
    | 1 | (target) | target plugin | remove |
    | 2 | (dep) | Orphaned — provided 'capability' only for target | remove |
    | — | (dep) | Still needed by other installed plugins | keep |
+   | — | (dep) | Stateful/shared infra — holds user data or running state | keep |
 
    - Plugins in `remove_order` show as "remove" with their removal order number
    - Plugins in `kept_deps` show as "keep" (no order number) with the reason they're retained
+   - Some kept deps are stateful/shared infrastructure (e.g. a knowledge base, event router, or dashboard) that hold user data or run live services. They are never auto-removed even when orphaned. If the user truly wants one gone, tell them to uninstall it explicitly by name.
    - Include a one-line summary below the table (e.g., "2 to remove, 1 kept (shared dependency)")
 
 4. **Ask for confirmation.** Wait for explicit user approval before removing anything.

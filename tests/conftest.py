@@ -120,6 +120,28 @@ def marketplace_json(mock_home):
                 "built_in_capabilities": ["static-site-build"],
                 "environment": {},
             },
+            {
+                "name": "test-bundle",
+                "source": {"source": "github", "repo": "ThatcherT/test-bundle"},
+                "description": "Bundle that requires a stateful vault provider",
+                "version": "1.0.0",
+                "requires": ["vault-store"],
+                "optional": [],
+                "provides": [],
+                "environment": {},
+            },
+            {
+                "name": "test-vault",
+                "source": {"source": "github", "repo": "ThatcherT/test-vault"},
+                "description": "Stateful provider holding user data; retained on orphan",
+                "version": "1.0.0",
+                "category": "provider",
+                "requires": [],
+                "optional": [],
+                "provides": ["vault-store"],
+                "retain_on_orphan": True,
+                "environment": {},
+            },
         ],
     }
     mp_path.write_text(json.dumps(data))

@@ -85,6 +85,25 @@ def installed_transitive_chain(mock_home, marketplace_json):
     return data
 
 
+@pytest.fixture
+def installed_bundle_and_stateful_provider(mock_home, marketplace_json):
+    """Install test-bundle + test-vault (a retain_on_orphan stateful provider)."""
+    data = {
+        "version": 2,
+        "plugins": {
+            "test-bundle@softwaresoftware-plugins": [
+                {"scope": "user", "installPath": "/fake/test-bundle", "version": "1.0.0"}
+            ],
+            "test-vault@softwaresoftware-plugins": [
+                {"scope": "user", "installPath": "/fake/test-vault", "version": "1.0.0"}
+            ],
+        },
+    }
+    installed_path = mock_home / ".claude" / "plugins" / "installed_plugins.json"
+    installed_path.write_text(json.dumps(data))
+    return data
+
+
 def test_uninstall_basic(installed_cardwatch_and_deps):
     """Uninstalling cardwatch should also remove notify-linux (orphaned)."""
     plan = resolver.get_uninstall_plan("cardwatch")
@@ -112,6 +131,29 @@ def test_uninstall_transitive_orphans(installed_transitive_chain):
     assert "test-app" in names
     assert "test-browser" in names
     assert "test-daemon" in names
+    assert plan["kept_deps"] == []
+
+
+def test_uninstall_keeps_stateful_provider(installed_bundle_and_stateful_provider):
+    """Uninstalling a consumer must NOT auto-remove a retain_on_orphan provider,
+    even though no other installed plugin requires it. It holds user data/state."""
+    plan = resolver.get_uninstall_plan("test-bundle")
+    remove_names = [r["plugin"] for r in plan["remove_order"]]
+    kept_names = [k["plugin"] for k in plan["kept_deps"]]
+    assert "test-bundle" in remove_names
+    assert "test-vault" not in remove_names
+    assert "test-vault" in kept_names
+    # Reason should make the stateful/explicit-removal intent clear.
+    vault_kept = next(k for k in plan["kept_deps"] if k["plugin"] == "test-vault")
+    assert "explicitly" in vault_kept["reason"].lower()
+
+
+def test_uninstall_unflagged_orphan_still_removed(installed_cardwatch_and_deps):
+    """An orphaned dep WITHOUT retain_on_orphan must still be removed —
+    the safeguard is opt-in and does not change default orphan behavior."""
+    plan = resolver.get_uninstall_plan("cardwatch")
+    remove_names = [r["plugin"] for r in plan["remove_order"]]
+    assert "notify-linux" in remove_names
     assert plan["kept_deps"] == []
 
 

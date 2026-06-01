@@ -580,6 +580,20 @@ def get_uninstall_plan(plugin_name: str, marketplace: str = "softwaresoftware-pl
                     "capability": cap,
                     "reason": f"Still needed by other installed plugins",
                 })
+            elif installed_provider.get("retain_on_orphan"):
+                # Provider holds user data or runtime/daemon state (vault,
+                # event routes, dashboards, live sessions) that the resolver
+                # can't see. Never auto-remove it on orphan — keep it and let
+                # the user remove it explicitly if they really want to.
+                kept_deps.append({
+                    "plugin": pname,
+                    "capability": cap,
+                    "reason": (
+                        f"Stateful/shared infra — holds user data or running "
+                        f"state. Not auto-removed; uninstall '{pname}' "
+                        f"explicitly if you really want it gone."
+                    ),
+                })
             else:
                 remove_order.append({
                     "plugin": pname,
