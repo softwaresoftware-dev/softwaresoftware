@@ -6,7 +6,6 @@ and auto-selects providers based on environment probes.
 
 import time
 
-import mesh
 import probes
 import registry
 import telemetry
@@ -643,20 +642,14 @@ def find_satisfier(capability: str, marketplace: str = "softwaresoftware-plugins
     """Find where a capability will be served at spawn time.
 
     Resolution order (preference, highest first):
-      1. Locally-installed plugin — no cross-host hop.
+      1. Locally-installed plugin.
       2. Loaded third-party MCP (Slack, Gmail, ...) — already in this Claude.
-      3. Mesh host advertising the capability — requires forwarding.
-      4. Nothing — capability cannot be served.
+      3. Nothing — capability cannot be served.
 
     Returns:
-        {"type": "plugin", "name": <plugin-name>}                            — installed plugin
-        {"type": "mcp",    "name": <mcp-name>}                               — loaded MCP
-        {"type": "host",   "host": <hostname>, "self": <bool>}               — mesh host
-        {"type": "none"}                                                     — unsatisfiable
-
-    Self-host as a 'host' result is intentional. The caller (taskpilot)
-    interprets host=self as 'spawn here'; we don't downgrade to type=none
-    just because the local install lacks a plugin satisfier.
+        {"type": "plugin", "name": <plugin-name>}   — installed plugin
+        {"type": "mcp",    "name": <mcp-name>}      — loaded MCP
+        {"type": "none"}                            — unsatisfiable
     """
     plugin_name = _installed_provider_name(capability, marketplace)
     if plugin_name:
@@ -665,9 +658,5 @@ def find_satisfier(capability: str, marketplace: str = "softwaresoftware-plugins
     mcp_name = _mcp_satisfies(capability)
     if mcp_name:
         return {"type": "mcp", "name": mcp_name}
-
-    for host in mesh.list_hosts():
-        if capability in (host.get("capabilities") or []):
-            return {"type": "host", "host": host["host"], "self": bool(host.get("self"))}
 
     return {"type": "none"}

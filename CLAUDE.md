@@ -19,7 +19,6 @@ Plugin installer for Claude Code. Detects environment, resolves capabilities to 
 
 - `probes.py` — 8 generic environment detection primitives
 - `registry.py` — reads marketplace, installed plugins
-- `mesh.py` — thin client for session-bridge `/hosts` (mesh-host capability discovery)
 - `resolver.py` — dependency diff engine, provider ranking, install plan generation, runtime satisfier lookup
 - `server.py` — FastMCP server exposing 2 MCP tools
 
@@ -30,7 +29,7 @@ Plugin installer for Claude Code. Detects environment, resolves capabilities to 
 
 ## Runtime satisfier lookup
 
-`resolver.find_satisfier(capability)` answers "where will this capability be served at spawn time?" Used by taskpilot when creating a task whose brief requires capabilities the local install can't fulfill on its own. Resolution order: installed plugin > loaded third-party MCP > mesh host (via session-bridge `/hosts`) > nothing. A local satisfier always wins to avoid a cross-host hop.
+`resolver.find_satisfier(capability)` answers "where will this capability be served at spawn time?" Used by taskpilot when creating a task whose brief requires capabilities the local install can't fulfill on its own. Resolution order: installed plugin > loaded third-party MCP > nothing.
 
 ## Development
 
