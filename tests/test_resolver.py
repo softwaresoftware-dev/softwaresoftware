@@ -605,3 +605,167 @@ def test_no_provider_records_unmet_binary_probe(mock_home, monkeypatch):
     assert "binary:tmux" in prov["unmet_probes"]
     # The OS probe passed, so it must NOT appear as unmet.
     assert "os" not in prov["unmet_probes"]
+
+
+# --- binary list = AND semantics ---
+
+
+def _write_marketplace(mock_home, plugins, external_registries=None):
+    mp_path = mock_home / ".claude" / "plugins" / "marketplaces" / "softwaresoftware-plugins" / ".claude-plugin" / "marketplace.json"
+    mp_path.parent.mkdir(parents=True, exist_ok=True)
+    data = {"name": "softwaresoftware-plugins", "plugins": plugins}
+    if external_registries:
+        data["external_registries"] = external_registries
+    mp_path.write_text(json.dumps(data))
+
+
+def test_resolve_binary_list_requires_all(mock_home, monkeypatch):
+    """binary: ["tmux", "uv"] means BOTH binaries required — one missing = no match."""
+    import probes
+    _write_marketplace(mock_home, [
+        {"name": "spawner", "requires": [], "optional": [],
+         "provides": ["agent-spawning"],
+         "environment": {"binary": ["tmux", "uv"]}},
+    ])
+    # Only uv present — must NOT match
+    monkeypatch.setattr(probes, "probe_binary", lambda name: name == "uv")
+    providers = resolver.resolve("agent-spawning")
+    assert providers[0]["match"] is False
+    # The missing binary is individually identified for remediation
+    assert providers[0]["match_details"]["binary:tmux"] is False
+    assert providers[0]["match_details"]["binary:uv"] is True
+
+
+def test_resolve_binary_list_all_present_matches(mock_home, monkeypatch):
+    import probes
+    _write_marketplace(mock_home, [
+        {"name": "spawner", "requires": [], "optional": [],
+         "provides": ["agent-spawning"],
+         "environment": {"binary": ["tmux", "uv"]}},
+    ])
+    monkeypatch.setattr(probes, "probe_binary", lambda name: name in ("tmux", "uv"))
+    providers = resolver.resolve("agent-spawning")
+    assert providers[0]["match"] is True
+
+
+def test_resolve_os_list_stays_any(mock_home, monkeypatch):
+    """os lists keep OR semantics — only binary lists are AND."""
+    import probes
+    _write_marketplace(mock_home, [
+        {"name": "daemon-mgr", "requires": [], "optional": [],
+         "provides": ["daemon"],
+         "environment": {"os": ["linux", "darwin", "windows"]}},
+    ])
+    monkeypatch.setattr(probes, "probe_os", lambda: "darwin")
+    providers = resolver.resolve("daemon")
+    assert providers[0]["match"] is True
+
+
+def test_install_plan_binary_list_missing_one_reports_unmet(mock_home, monkeypatch):
+    """A provider missing one of its required binaries lands in no_provider_available
+    with the specific missing binary probe."""
+    import probes
+    _write_marketplace(mock_home, [
+        {"name": "app", "requires": ["agent-spawning"], "optional": [],
+         "provides": [], "environment": {}},
+        {"name": "spawner", "requires": [], "optional": [],
+         "provides": ["agent-spawning"],
+         "environment": {"binary": ["tmux", "uv"]}},
+    ])
+    monkeypatch.setattr(probes, "probe_binary", lambda name: name == "uv")
+    plan = resolver.get_install_plan("app")
+    assert [e["plugin"] for e in plan["install_order"]] == []
+    entry = next(e for e in plan["no_provider_available"] if e["capability"] == "agent-spawning")
+    prov = entry["providers"][0]
+    assert "binary:tmux" in prov["unmet_probes"]
+    assert "binary:uv" not in prov["unmet_probes"]
+
+
+# --- malformed marketplace entries must never crash get_install_plan ---
+
+
+def test_install_plan_survives_malformed_entries(mock_home, monkeypatch):
+    """One malformed marketplace entry (bad env shapes, non-dict entries) must
+    not break install planning for anyone."""
+    _write_marketplace(mock_home, [
+        {"name": "app", "requires": ["cap"], "optional": [],
+         "provides": [], "environment": {}},
+        # provider with garbage probe values
+        {"name": "bad-provider", "requires": [], "optional": [],
+         "provides": ["cap"],
+         "environment": {"port": "no-colon-here", "binary": {"weird": True},
+                         "totally-unknown-probe": 42}},
+        # environment is not even a dict
+        {"name": "worse-provider", "requires": [], "optional": [],
+         "provides": ["cap"], "environment": "linux"},
+        # entry is not a dict at all
+        "just-a-string",
+        None,
+    ])
+    plan = resolver.get_install_plan("app")
+    assert "install_order" in plan
+    # worse-provider (malformed env treated as universal) or a no_provider report —
+    # either way the plan is produced without raising.
+    assert isinstance(plan["no_provider_available"], list)
+
+
+def test_registry_malformed_installed_entries(mock_home, marketplace_json):
+    """get_plugin_manifest / get_plugin_install_path tolerate wrong-shaped entries."""
+    import registry
+    installed_path = mock_home / ".claude" / "plugins" / "installed_plugins.json"
+    installed_path.write_text(json.dumps({
+        "version": 2,
+        "plugins": {
+            "notify-linux@softwaresoftware-plugins": {"installPath": "/not-a-list"},
+            "cardwatch@softwaresoftware-plugins": ["just-a-string"],
+        },
+    }))
+    assert registry.get_plugin_manifest("notify-linux@softwaresoftware-plugins") is None
+    assert registry.get_plugin_manifest("cardwatch@softwaresoftware-plugins") is None
+    assert registry.get_plugin_install_path("notify-linux") is None
+    # is_plugin_installed still works off the keys
+    assert registry.is_plugin_installed("notify-linux") is True
+
+
+# --- installed-but-unmatched provider must not silently vanish ---
+
+
+def test_installed_provider_env_mismatch_reported(mock_home, monkeypatch):
+    """A transitive capability whose only provider is installed but no longer
+    matches the environment must be reported, not silently dropped."""
+    import probes
+    _write_marketplace(mock_home, [
+        {"name": "app", "requires": ["routing"], "optional": [],
+         "provides": [], "environment": {}},
+        {"name": "router", "requires": ["deploy"], "optional": [],
+         "provides": ["routing"], "environment": {}},
+        {"name": "deploy-provider", "requires": [], "optional": [],
+         "provides": ["deploy"], "environment": {"binary": "nginx"}},
+    ])
+    # deploy-provider is installed, but nginx has since been removed
+    installed_path = mock_home / ".claude" / "plugins" / "installed_plugins.json"
+    installed_path.write_text(json.dumps({
+        "version": 2,
+        "plugins": {
+            "deploy-provider@softwaresoftware-plugins": [
+                {"scope": "user", "installPath": "/fake/deploy-provider", "version": "1.0.0"}
+            ],
+        },
+    }))
+    monkeypatch.setattr(probes, "probe_binary", lambda name: False)
+
+    plan = resolver.get_install_plan("app")
+    # router still gets planned for routing
+    assert any(e["plugin"] == "router" for e in plan["install_order"])
+    # deploy must NOT silently vanish — it's reported with a reason
+    entry = next(
+        (e for e in plan["no_provider_available"] if e["capability"] == "deploy"),
+        None,
+    )
+    assert entry is not None, "capability with installed-but-unmatched provider was silently dropped"
+    assert entry["required"] is True
+    assert "environment no longer matches" in entry["reason"]
+    prov = next(p for p in entry["providers"] if p["plugin"] == "deploy-provider")
+    assert prov["installed"] is True
+    assert "binary:nginx" in prov["unmet_probes"]
+    assert "environment no longer matches" in prov["reason"]

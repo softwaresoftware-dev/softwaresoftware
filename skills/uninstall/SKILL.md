@@ -9,11 +9,11 @@ Uninstall a plugin and safely remove dependencies that are no longer needed by a
 
 ## Arguments
 
-The user provides a plugin name (e.g., `/softwaresoftware:uninstall liteframe`).
+The user provides a plugin name (e.g., `/softwaresoftware:uninstall liteframe`) or a name with marketplace (e.g., `/softwaresoftware:uninstall cool-tool@other-plugins`) for plugins installed from other marketplaces.
 
 ## Workflow
 
-1. **Get the uninstall plan.** Call the `get_uninstall_plan` MCP tool with the plugin name.
+1. **Get the uninstall plan.** Call the `get_uninstall_plan` MCP tool with the plugin name (including `@marketplace` suffix if the user specified one).
 
 2. **Handle errors and early exits.**
    - If the plan has an `error` field, tell the user and stop.

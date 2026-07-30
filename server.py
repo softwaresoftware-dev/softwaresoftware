@@ -49,6 +49,9 @@ def get_uninstall_plan(plugin_name: str) -> dict:
     Identifies dependencies that can be safely removed because no other
     installed plugin needs the capabilities they provide. Dependencies
     shared with other plugins are kept.
+
+    Works across all installed marketplaces and supports 'name@marketplace'
+    syntax to target a specific marketplace.
     """
     return resolver.get_uninstall_plan(plugin_name)
 

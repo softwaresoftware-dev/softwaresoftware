@@ -52,15 +52,27 @@ The `environment` object maps probe keys to expected values. The resolver runs o
 
 ### List values
 
-A probe value can be a list, meaning "any of these matches":
+A probe value can be a list. What a list means depends on the probe:
 
-```json
-"environment": {
-  "os": ["linux", "darwin"]
-}
-```
+- **`binary` lists mean ALL are required (AND).** Every listed binary must be present in `PATH` for the provider to match:
 
-This provider matches Linux OR macOS.
+  ```json
+  "environment": {
+    "binary": ["tmux", "uv"]
+  }
+  ```
+
+  This provider requires tmux AND uv. Each binary is probed individually, so a failed match reports the specific missing binary (e.g. `binary:tmux`) in `unmet_probes`.
+
+- **All other probe lists mean "any of these matches" (OR):**
+
+  ```json
+  "environment": {
+    "os": ["linux", "darwin"]
+  }
+  ```
+
+  This provider matches Linux OR macOS.
 
 ### No environment = universal
 
@@ -209,8 +221,6 @@ Avoid verb forms (`notify`, `automate-browser`) and implementation details (`tmu
 | `human-approval` | approval-channel | optional: channel |
 | `memory` | agent-memory | -- |
 | `design-system` | softwaresoftware-design-system | -- |
-| `status-dashboard` | taskboard | binary: python3 |
-| `knowledge-base` | knowledge-base | binary: git |
 | `event-routing` | dispatcher | binary: python3, git |
 | `social-posting-reddit` | reddit-poster | -- |
 | `payment-information` | payment-vault | -- |

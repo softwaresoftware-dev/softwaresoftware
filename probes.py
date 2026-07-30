@@ -31,9 +31,38 @@ def probe_shell() -> str:
     return os.path.basename(shell) if shell else "unknown"
 
 
+# Fallback binary names — when the primary name isn't found, try these.
+# Windows ships the real interpreter as python.exe; "python3" may not exist
+# or may resolve to the WindowsApps Store stub.
+BINARY_FALLBACKS = {
+    "python3": ["python"],
+}
+
+
+def _which(name: str) -> str | None:
+    """shutil.which, but treats Windows Store stubs as not-found.
+
+    The WindowsApps python.exe/python3.exe are zero-byte stubs that open the
+    Microsoft Store instead of running Python — finding one is a false positive.
+    """
+    path = shutil.which(name)
+    if path and "WindowsApps" in path:
+        return None
+    return path
+
+
 def probe_binary(name: str) -> bool:
-    """Check if a binary is available in PATH."""
-    return shutil.which(name) is not None
+    """Check if a binary is available in PATH.
+
+    Falls back to known alternate names (e.g. python3 -> python on Windows)
+    and ignores WindowsApps Store stubs.
+    """
+    if _which(name) is not None:
+        return True
+    for alt in BINARY_FALLBACKS.get(name, []):
+        if _which(alt) is not None:
+            return True
+    return False
 
 
 def probe_port(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -42,6 +71,21 @@ def probe_port(host: str, port: int, timeout: float = 2.0) -> bool:
         with socket.create_connection((host, port), timeout=timeout):
             return True
     except (OSError, TimeoutError):
+        return False
+
+
+def _probe_port_value(value) -> bool:
+    """Parse a 'host:port' probe value and check reachability.
+
+    Tolerant of malformed values (missing colon, non-numeric port,
+    non-string input) — returns False instead of raising.
+    """
+    try:
+        host, _, port = str(value).rpartition(":")
+        if not host:
+            return False
+        return probe_port(host, int(port))
+    except (ValueError, TypeError):
         return False
 
 
@@ -66,7 +110,8 @@ def probe_mcp(name: str) -> bool:
                         manifest = json.loads(plugin_json.read_text())
                         if name in manifest.get("mcpServers", {}):
                             return True
-        except (json.JSONDecodeError, KeyError):
+        except Exception:
+            # Malformed installed_plugins.json or plugin.json — treat as not found
             pass
 
     # Check all user-scope settings files for manual MCP configs
@@ -86,7 +131,7 @@ def probe_mcp(name: str) -> bool:
                 settings = json.loads(settings_path.read_text())
                 if name in settings.get("mcpServers", {}):
                     return True
-            except (json.JSONDecodeError, KeyError):
+            except Exception:
                 pass
 
     return False
@@ -105,7 +150,8 @@ def probe_plugin(name: str) -> bool:
             plugin_name = key.split("@")[0]
             if plugin_name == name:
                 return True
-    except (json.JSONDecodeError, KeyError):
+    except Exception:
+        # Malformed installed_plugins.json — treat as not installed
         pass
     return False
 
@@ -120,7 +166,7 @@ PROBES = {
     "os": lambda val: probe_os() == val,
     "shell": lambda val: probe_shell() == val,
     "binary": lambda val: probe_binary(val),
-    "port": lambda val: probe_port(val.split(":")[0], int(val.split(":")[1])),
+    "port": lambda val: _probe_port_value(val),
     "env": lambda val: probe_env(val),
     "mcp": lambda val: probe_mcp(val),
     "plugin": lambda val: probe_plugin(val),
@@ -142,6 +188,9 @@ def gather_facts(environment_reqs: list[dict]) -> dict:
     """
     facts = {}
     for env_req in environment_reqs:
+        if not isinstance(env_req, dict):
+            # Malformed marketplace entry — skip, never crash the plan
+            continue
         for key, value in env_req.items():
             # List values expand into individual checks (e.g. os: ["linux", "darwin"])
             values = value if isinstance(value, list) else [value]
@@ -150,7 +199,12 @@ def gather_facts(environment_reqs: list[dict]) -> dict:
                 if fact_key not in facts:
                     probe_fn = PROBES.get(key)
                     if probe_fn:
-                        facts[fact_key] = probe_fn(v)
+                        try:
+                            facts[fact_key] = bool(probe_fn(v))
+                        except Exception:
+                            # A probe crashing on a malformed value must never
+                            # break an install plan — treat as not matching.
+                            facts[fact_key] = False
                     else:
                         facts[fact_key] = False
     return facts

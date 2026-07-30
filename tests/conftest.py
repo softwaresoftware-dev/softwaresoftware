@@ -1,8 +1,29 @@
 """Shared fixtures for softwaresoftware tests."""
 
 import json
+import os
+
+# Disable telemetry BEFORE any test module imports resolver/telemetry —
+# telemetry.ENABLED is computed at import time from this env var.
+os.environ["CLAUDE_PLUGIN_OPTION_TELEMETRY"] = "false"
 
 import pytest
+
+import telemetry
+
+# Belt and braces in case telemetry was imported before this conftest ran.
+telemetry.ENABLED = False
+
+
+@pytest.fixture(autouse=True)
+def _no_telemetry_network(monkeypatch):
+    """Guarantee no test ever fires a real telemetry network call."""
+    monkeypatch.setattr(telemetry, "ENABLED", False)
+
+    def _fail(payload):  # pragma: no cover — only hit if telemetry leaks
+        raise AssertionError("telemetry attempted a network call during tests")
+
+    monkeypatch.setattr(telemetry, "_post", _fail)
 
 
 @pytest.fixture

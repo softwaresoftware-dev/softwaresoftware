@@ -32,7 +32,8 @@ def get_installed_plugins() -> dict:
     data = _read_json(INSTALLED_PATH)
     if not data or not isinstance(data, dict):
         return {}
-    return data.get("plugins", {})
+    plugins = data.get("plugins", {})
+    return plugins if isinstance(plugins, dict) else {}
 
 
 def get_enabled_plugins() -> dict:
@@ -57,7 +58,11 @@ def get_marketplace_plugins(marketplace: str = "softwaresoftware-plugins") -> li
     data = _read_json(mp_path)
     if not data or not isinstance(data, dict):
         return []
-    return data.get("plugins", [])
+    plugins = data.get("plugins", [])
+    if not isinstance(plugins, list):
+        return []
+    # Drop malformed (non-dict) entries — one bad entry must never break resolution
+    return [p for p in plugins if isinstance(p, dict)]
 
 
 def get_plugin_manifest(plugin_key: str) -> dict | None:
@@ -71,7 +76,7 @@ def get_plugin_manifest(plugin_key: str) -> dict | None:
     """
     installed = get_installed_plugins()
     entries = installed.get(plugin_key, [])
-    if not entries:
+    if not isinstance(entries, list) or not entries or not isinstance(entries[0], dict):
         return None
     install_path = Path(entries[0].get("installPath", ""))
     manifest_path = install_path / ".claude-plugin" / "plugin.json"
@@ -190,7 +195,12 @@ def get_plugin_install_path(name: str) -> Path | None:
         Path to the plugin's install directory, or None if not installed.
     """
     for key, entries in get_installed_plugins().items():
-        if key.split("@")[0] == name and entries:
+        if (
+            key.split("@")[0] == name
+            and isinstance(entries, list)
+            and entries
+            and isinstance(entries[0], dict)
+        ):
             return Path(entries[0].get("installPath", ""))
     return None
 

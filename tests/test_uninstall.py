@@ -194,3 +194,46 @@ def test_uninstall_no_deps(mock_home, marketplace_json):
     assert len(plan["remove_order"]) == 1
     assert plan["remove_order"][0]["plugin"] == "liteframe"
     assert plan["kept_deps"] == []
+
+# --- name@marketplace / multi-marketplace support ---
+
+
+@pytest.fixture
+def installed_passthrough(mock_home, marketplace_json, other_marketplace):
+    """cool-tool from other-plugins installed via passthrough."""
+    data = {
+        "version": 2,
+        "plugins": {
+            "cool-tool@other-plugins": [
+                {"scope": "user", "installPath": "/fake/cool-tool", "version": "1.0.0"}
+            ],
+        },
+    }
+    installed_path = mock_home / ".claude" / "plugins" / "installed_plugins.json"
+    installed_path.write_text(json.dumps(data))
+    return data
+
+
+def test_uninstall_at_marketplace_syntax(installed_passthrough):
+    """name@marketplace targets the specified marketplace, symmetric with get_install_plan."""
+    plan = resolver.get_uninstall_plan("cool-tool@other-plugins")
+    assert "error" not in plan
+    assert plan["plugin"] == "cool-tool"
+    assert plan["marketplace"] == "other-plugins"
+    assert plan["remove_order"][0]["plugin"] == "cool-tool"
+
+
+def test_uninstall_other_marketplace_auto_discovered(installed_passthrough):
+    """Without @marketplace, the plugin is found across installed marketplaces."""
+    plan = resolver.get_uninstall_plan("cool-tool")
+    assert "error" not in plan
+    assert plan["marketplace"] == "other-plugins"
+    assert plan["remove_order"][0]["plugin"] == "cool-tool"
+
+
+def test_uninstall_default_marketplace_still_works(installed_cardwatch_and_deps):
+    """softwaresoftware plugins keep full orphan resolution via the default path."""
+    plan = resolver.get_uninstall_plan("cardwatch@softwaresoftware-plugins")
+    names = [r["plugin"] for r in plan["remove_order"]]
+    assert "cardwatch" in names
+    assert "notify-linux" in names

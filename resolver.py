@@ -187,12 +187,23 @@ def resolve(capability: str, marketplace: str = "softwaresoftware-plugins") -> l
     ranked = []
     for provider in providers:
         env = provider.get("environment", {})
+        if not isinstance(env, dict):
+            env = {}  # malformed entry — treat as no environment requirements
         match_details = {}
         all_match = True
 
         for key, value in env.items():
-            # List values match if any individual value matches
-            if isinstance(value, list):
+            if isinstance(value, list) and key == "binary":
+                # binary lists mean ALL binaries are required (AND).
+                # Record each binary individually so unmet_probes stays
+                # actionable ("binary:tmux" -> install tmux).
+                for v in value:
+                    matched = facts.get(f"{key}:{v}", False)
+                    match_details[f"{key}:{v}"] = matched
+                    if not matched:
+                        all_match = False
+            elif isinstance(value, list):
+                # Other list values (os, shell, ...) match if ANY value matches
                 any_matched = any(facts.get(f"{key}:{v}", False) for v in value)
                 match_details[key] = any_matched
                 if not any_matched:
@@ -434,6 +445,31 @@ def get_install_plan(plugin_name: str, marketplace: str | None = None) -> dict:
                         "required": cap in required_caps,
                         "providers": failed_providers,
                     })
+            elif not any(e["capability"] == cap for e in no_provider):
+                # A provider IS installed but its environment no longer matches
+                # (e.g. the binary it needs was removed). Without this branch the
+                # capability would silently vanish from the plan — report it so
+                # the install skill can surface remediation.
+                failed_providers = []
+                for p in providers:
+                    if not p["installed"]:
+                        continue
+                    unmet = sorted(
+                        k for k, v in p.get("match_details", {}).items() if not v
+                    )
+                    failed_providers.append({
+                        "plugin": p["name"],
+                        "description": p.get("description", ""),
+                        "unmet_probes": unmet,
+                        "installed": True,
+                        "reason": "provider installed but environment no longer matches",
+                    })
+                no_provider.append({
+                    "capability": cap,
+                    "required": cap in required_caps,
+                    "providers": failed_providers,
+                    "reason": "provider installed but environment no longer matches",
+                })
 
     required_set = set(deps["missing"])
     _resolve_caps(deps["missing"] + deps["optional_missing"], required_set)
@@ -494,20 +530,32 @@ def get_install_plan(plugin_name: str, marketplace: str | None = None) -> dict:
     return result
 
 
-def get_uninstall_plan(plugin_name: str, marketplace: str = "softwaresoftware-plugins") -> dict:
+def get_uninstall_plan(plugin_name: str, marketplace: str | None = None) -> dict:
     """Generate an uninstall plan for a plugin and its orphaned dependencies.
 
     Identifies which dependencies were installed to support this plugin and can
     be safely removed — i.e., no other installed plugin requires the capability
     they provide.
 
+    Supports 'name@marketplace' syntax (symmetric with get_install_plan) so
+    plugins installed via passthrough from other marketplaces can be
+    uninstalled too. Without a marketplace, searches all installed
+    marketplaces (softwaresoftware-plugins first).
+
     Returns:
         {
             "plugin": str,
             "remove_order": list[dict],  — ordered list of what to remove (dependents first)
             "kept_deps": list[dict],     — deps kept because other plugins need them
+            "marketplace": str,          — source marketplace
         }
     """
+    if marketplace is None:
+        _, resolved_marketplace = registry.find_plugin_any_marketplace(plugin_name)
+        if "@" in plugin_name:
+            plugin_name = plugin_name.rsplit("@", 1)[0]
+        marketplace = resolved_marketplace or "softwaresoftware-plugins"
+
     plugin = registry.find_marketplace_plugin(plugin_name, marketplace)
     if not plugin:
         return {
@@ -621,6 +669,7 @@ def get_uninstall_plan(plugin_name: str, marketplace: str = "softwaresoftware-pl
         "plugin": plugin_name,
         "remove_order": remove_order,
         "kept_deps": kept_deps,
+        "marketplace": marketplace,
     }
 
 
